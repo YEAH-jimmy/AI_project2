@@ -100,7 +100,7 @@ export default function HomePage() {
             </div>
             <div>
               <Link href="/planner">
-                <Button variant={isScrolled ? "default" : "outline"} className={isScrolled ? "" : "border-white text-white hover:bg-white hover:text-blue-600"}>
+                <Button variant={isScrolled ? "default" : "outline"} className={isScrolled ? "" : "border-white text-white bg-white/10 backdrop-blur-sm hover:bg-white hover:text-blue-600"}>
                   여행 계획 시작하기
                 </Button>
               </Link>
@@ -142,7 +142,7 @@ export default function HomePage() {
                 </Button>
               </Link>
               <a href="#how-it-works">
-                <Button size="lg" variant="outline" className="text-lg px-8 py-6 border-white text-white hover:bg-white hover:text-blue-700">
+                <Button size="lg" variant="outline" className="text-lg px-8 py-6 border-white text-white bg-white/10 backdrop-blur-sm hover:bg-white hover:text-blue-700">
                   이용 방법 알아보기
                 </Button>
               </a>

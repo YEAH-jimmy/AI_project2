@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useTravelPlannerStore } from '@/lib/stores/travel-planner-store'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -37,37 +37,25 @@ const interestOptions = [
 export function InterestsStep() {
   const { planData, updatePlanData, setCurrentStep } = useTravelPlannerStore()
   const [selectedInterests, setSelectedInterests] = useState<string[]>(planData.interests || [])
-  const [isUpdating, setIsUpdating] = useState(false)
-
-  // 선택된 관심사가 변경될 때마다 상태 업데이트
-  useEffect(() => {
-    if (isUpdating) {
-      updatePlanData({
-        interests: selectedInterests,
-      });
-      setIsUpdating(false);
-    }
-  }, [selectedInterests, updatePlanData, isUpdating]);
 
   const handleInterestToggle = (interest: string) => {
     setSelectedInterests(prev => 
       prev.includes(interest) 
         ? prev.filter(i => i !== interest)
         : [...prev, interest]
-    );
-    setIsUpdating(true);
+    )
   }
 
   const handleNext = () => {
-    // 먼저 상태 업데이트
+    // 먼저 데이터 업데이트
     updatePlanData({
       interests: selectedInterests,
-    });
+    })
     
-    // 약간의 지연 후 다음 단계로 이동
+    // 딜레이 후 다음 단계로 이동 
     setTimeout(() => {
-      setCurrentStep(7);
-    }, 100);
+      setCurrentStep(7)
+    }, 50)
   }
 
   const handlePrevious = () => {

@@ -2,89 +2,57 @@ import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
 
 export interface TravelPlanData {
-  // 1단계: 날짜 선택
+  destination?: string
   startDate?: Date
   endDate?: Date
-  
-  // 2단계: 여행지 선택
-  destination?: string
-  destinationPlaceId?: string
-  destinationCoordinates?: {
-    lat: number
-    lng: number
-  }
-  
-  // 3단계: 숙소 정보
+  accommodationType?: 'hotel' | 'guesthouse' | 'pension' | 'airbnb' | 'camping'
   accommodationLocation?: {
     address: string
-    lat: number
-    lng: number
-  }
-  accommodationType?: 'hotel' | 'airbnb' | 'guesthouse' | 'resort' | 'other'
-  
-  // 4단계: 이동 수단
-  intercityTransport?: 'ktx' | 'bus' | 'car' | 'airplane' | 'other'
-  localTransport?: 'public' | 'walk' | 'bicycle' | 'rental-car' | 'other'
-  
-  // 5단계: 인원 및 연령
-  travelers: number
-  ageGroups: string[]
-  
-  // 6단계: 관심사
-  interests: string[]
-  
-  // 7단계: 필수 방문 장소
-  mustVisitPlaces: Array<{
-    name: string
-    placeId?: string
-    address?: string
     lat?: number
     lng?: number
-  }>
-  
-  // 8단계: 예산
+  }
+  intercityTransport?: 'ktx' | 'bus' | 'airplane' | 'car' | 'ferry'
+  localTransport?: 'public' | 'taxi' | 'rental' | 'walk'
+  travelers?: number
+  ageGroups?: string[]
+  interests?: string[]
+  mustVisitPlaces?: string[]
   budget?: number
   budgetCurrency?: 'KRW' | 'USD'
+  additionalRequests?: string
+}
+
+export interface Attraction {
+  name: string
+  description: string
+  type: string
+  lat: number
+  lng: number
+  address?: string
+  rating?: number
+  image?: string
+  tags?: string[]
+  openingHours?: string
+  visitDuration?: number // minutes
+}
+
+export interface DayPlan {
+  date: Date
+  attractions: Attraction[]
+  meals?: {
+    breakfast?: string
+    lunch?: string
+    dinner?: string
+  }
+  transport?: string
+  notes?: string
 }
 
 export interface GeneratedItinerary {
-  id: string
-  title: string
-  days: Array<{
-    date: Date
-    activities: Array<{
-      time: string
-      title: string
-      description: string
-      location: {
-        name: string
-        address: string
-        lat: number
-        lng: number
-      }
-      duration: number // in minutes
-      cost?: number
-      type: 'attraction' | 'restaurant' | 'accommodation' | 'transport' | 'activity'
-    }>
-  }>
-  totalCost?: number
-  weatherInfo?: any
-  generatedAt: Date
-  // 카카오맵 관련 정보
-  mapInfo?: {
-    center: { lat: number; lng: number }
-    markers: Array<{
-      lat: number
-      lng: number
-      name: string
-      description?: string
-    }>
-    optimizedRoute?: Array<{
-      lat: number
-      lng: number
-      name: string
-    }>
-  }
+  summary: string
+  days: DayPlan[]
+  totalDistance?: number
+  estimatedCost?: number
 }
 
 interface TravelPlannerState {
@@ -116,6 +84,16 @@ const initialPlanData: TravelPlanData = {
   budgetCurrency: 'KRW'
 }
 
+// Date 객체 직렬화/역직렬화 핸들러
+const dateReviver = (key: string, value: any) => {
+  // startDate와 endDate 속성이고, 날짜 형식 문자열이면 Date 객체로 변환
+  const dateKeys = ['startDate', 'endDate'];
+  if (dateKeys.includes(key) && typeof value === 'string') {
+    return new Date(value);
+  }
+  return value;
+};
+
 export const useTravelPlannerStore = create<TravelPlannerState>()(
   devtools(
     persist(
@@ -124,12 +102,21 @@ export const useTravelPlannerStore = create<TravelPlannerState>()(
         planData: initialPlanData,
         isGenerating: false,
         
-        setCurrentStep: (step) => set({ currentStep: step }),
+        setCurrentStep: (step) => {
+          // 현재 단계를 로깅
+          console.log(`Moving to step: ${step} from: ${get().currentStep}`);
+          set({ currentStep: step });
+        },
         
-        updatePlanData: (data) => 
+        updatePlanData: (data) => {
+          // 데이터 업데이트를 로깅
+          console.log('Updating plan data with:', data);
           set((state) => ({
             planData: { ...state.planData, ...data }
-          })),
+          }));
+          // 업데이트 후 상태 로깅
+          console.log('Updated plan data:', get().planData);
+        },
         
         resetPlanData: () => 
           set({ 
@@ -146,6 +133,14 @@ export const useTravelPlannerStore = create<TravelPlannerState>()(
       }),
       {
         name: 'travel-planner-storage',
+        // 저장 시 Date 객체 처리
+        serialize: (state) => {
+          return JSON.stringify(state);
+        },
+        // 로딩 시 Date 객체 복원
+        deserialize: (str) => {
+          return JSON.parse(str, dateReviver);
+        },
       }
     ),
     {

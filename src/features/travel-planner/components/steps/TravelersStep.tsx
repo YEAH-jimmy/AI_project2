@@ -1,23 +1,11 @@
 'use client'
 
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
+import { useState } from 'react'
 import { useTravelPlannerStore } from '@/lib/stores/travel-planner-store'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Users, ArrowRight, ArrowLeft, Minus, Plus } from 'lucide-react'
-import { useState, useEffect } from 'react'
-
-const travelersSchema = z.object({
-  travelers: z.number().min(1, '최소 1명은 필요합니다').max(20, '최대 20명까지 가능합니다'),
-  ageGroups: z.array(z.string()).min(1, '연령대를 선택해주세요'),
-})
-
-type TravelersFormData = z.infer<typeof travelersSchema>
 
 const ageGroupOptions = [
   { value: '10s', label: '10대', description: '10-19세' },
@@ -32,50 +20,6 @@ export function TravelersStep() {
   const { planData, updatePlanData, setCurrentStep } = useTravelPlannerStore()
   const [travelers, setTravelers] = useState(planData.travelers || 1)
   const [selectedAgeGroups, setSelectedAgeGroups] = useState<string[]>(planData.ageGroups || [])
-  
-  const {
-    handleSubmit,
-    formState: { errors },
-    setValue,
-    trigger
-  } = useForm<TravelersFormData>({
-    resolver: zodResolver(travelersSchema),
-    mode: 'onChange',
-    defaultValues: {
-      travelers: planData.travelers || 1,
-      ageGroups: planData.ageGroups || [],
-    }
-  })
-
-  // 폼 값 업데이트 시 트리거
-  useEffect(() => {
-    setValue('travelers', travelers);
-    setValue('ageGroups', selectedAgeGroups);
-    trigger();
-  }, [travelers, selectedAgeGroups, setValue, trigger]);
-
-  const onSubmit = (data: TravelersFormData) => {
-    updatePlanData({
-      travelers: data.travelers,
-      ageGroups: data.ageGroups,
-    })
-    setCurrentStep(6)
-  }
-
-  // 직접 제출 처리 함수 (폼 유효성 검사 우회)
-  const handleNext = () => {
-    if (travelers >= 1 && travelers <= 20 && selectedAgeGroups.length > 0) {
-      updatePlanData({
-        travelers,
-        ageGroups: selectedAgeGroups,
-      })
-      setCurrentStep(6)
-    }
-  }
-
-  const handlePrevious = () => {
-    setCurrentStep(4)
-  }
 
   const handleTravelersChange = (delta: number) => {
     const newCount = Math.max(1, Math.min(20, travelers + delta))
@@ -88,6 +32,23 @@ export function TravelersStep() {
         ? prev.filter(g => g !== ageGroup)
         : [...prev, ageGroup]
     )
+  }
+
+  const handleNext = () => {
+    // 먼저 데이터 업데이트
+    updatePlanData({
+      travelers,
+      ageGroups: selectedAgeGroups,
+    })
+    
+    // 딜레이 후 다음 단계로 이동
+    setTimeout(() => {
+      setCurrentStep(6)
+    }, 50)
+  }
+
+  const handlePrevious = () => {
+    setCurrentStep(4)
   }
 
   const isValid = travelers >= 1 && travelers <= 20 && selectedAgeGroups.length > 0

@@ -102,7 +102,7 @@ export function ResultStep() {
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
             AI가 여행 일정을 생성 중입니다
           </h2>
-          <p className="text-gray-600">
+          <p className="text-gray-700">
             입력해주신 정보를 바탕으로 최적의 여행 일정을 만들고 있어요.
           </p>
         </div>
@@ -119,7 +119,7 @@ export function ResultStep() {
               
               <div className="space-y-2">
                 <p className="text-lg font-medium text-gray-900">AI 분석 중...</p>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-700">
                   📍 최적 경로 계산<br />
                   🏨 숙소 및 맛집 추천<br />
                   ⏰ 시간표 최적화<br />
@@ -151,7 +151,7 @@ export function ResultStep() {
       {/* 여행 정보 요약 */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-gray-900">
             <Calendar className="w-5 h-5" />
             여행 정보 요약
           </CardTitle>
@@ -160,34 +160,34 @@ export function ResultStep() {
           <div className="grid md:grid-cols-2 gap-4 text-sm">
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="text-gray-600">여행지:</span>
-                <span className="font-medium">{planData.destination}</span>
+                <span className="text-gray-700">여행지:</span>
+                <span className="font-medium text-gray-900">{planData.destination}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">기간:</span>
-                <span className="font-medium">
+                <span className="text-gray-700">기간:</span>
+                <span className="font-medium text-gray-900">
                   {planData.startDate && planData.endDate && (
-                    `${format(planData.startDate, 'M월 d일', { locale: ko })} - ${format(planData.endDate, 'M월 d일', { locale: ko })}`
+                    `${format(new Date(planData.startDate), 'M월 d일', { locale: ko })} - ${format(new Date(planData.endDate), 'M월 d일', { locale: ko })}`
                   )}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">인원:</span>
-                <span className="font-medium">{planData.travelers}명</span>
+                <span className="text-gray-700">인원:</span>
+                <span className="font-medium text-gray-900">{planData.travelers}명</span>
               </div>
             </div>
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="text-gray-600">교통수단:</span>
-                <span className="font-medium">{planData.intercityTransport}</span>
+                <span className="text-gray-700">교통수단:</span>
+                <span className="font-medium text-gray-900">{planData.intercityTransport}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">숙소 형태:</span>
-                <span className="font-medium">{planData.accommodationType}</span>
+                <span className="text-gray-700">숙소 형태:</span>
+                <span className="font-medium text-gray-900">{planData.accommodationType}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">예산:</span>
-                <span className="font-medium">
+                <span className="text-gray-700">예산:</span>
+                <span className="font-medium text-gray-900">
                   {planData.budget ? 
                     `${planData.budget.toLocaleString()}${planData.budgetCurrency === 'KRW' ? '원' : '$'}` 
                     : '제한 없음'
@@ -202,7 +202,7 @@ export function ResultStep() {
       {/* 카카오 지도 */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+          <CardTitle className="flex items-center justify-between text-gray-900">
             <div className="flex items-center gap-2">
               <Map className="w-5 h-5" />
               여행 경로 지도
@@ -215,7 +215,7 @@ export function ResultStep() {
               {showMap ? '지도 숨기기' : '지도 보기'}
             </Button>
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-gray-700">
             카카오맵으로 여행 경로와 주요 관광지를 확인하세요.
           </CardDescription>
         </CardHeader>
@@ -227,7 +227,7 @@ export function ResultStep() {
               height="400px"
               level={5}
             />
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs text-gray-700 mt-2">
               💡 지도의 마커를 클릭하면 더 자세한 정보를 볼 수 있습니다.
             </p>
           </CardContent>
@@ -237,11 +237,11 @@ export function ResultStep() {
       {/* 샘플 일정 (실제로는 AI가 생성) */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-gray-900">
             <MapPin className="w-5 h-5" />
             AI 추천 일정
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-gray-700">
             입력하신 정보를 바탕으로 생성된 맞춤 일정입니다.
           </CardDescription>
         </CardHeader>
@@ -249,9 +249,9 @@ export function ResultStep() {
           <div className="space-y-4">
             {planData.startDate && planData.endDate && (
               Array.from({ 
-                length: Math.ceil((planData.endDate.getTime() - planData.startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1 
+                length: Math.ceil((new Date(planData.endDate).getTime() - new Date(planData.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1 
               }).map((_, dayIndex) => {
-                const currentDate = new Date(planData.startDate!.getTime() + dayIndex * 24 * 60 * 60 * 1000)
+                const currentDate = new Date(new Date(planData.startDate!).getTime() + dayIndex * 24 * 60 * 60 * 1000)
                 return (
                   <div key={dayIndex} className="border-l-4 border-blue-500 pl-4">
                     <h4 className="font-semibold text-gray-900 mb-2">
@@ -259,29 +259,29 @@ export function ResultStep() {
                     </h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-600">09:00</span>
-                        <span>호텔 조식 및 체크아웃</span>
+                        <Clock className="w-4 h-4 text-gray-500" />
+                        <span className="text-gray-700">09:00</span>
+                        <span className="text-gray-900">호텔 조식 및 체크아웃</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-600">10:30</span>
-                        <span>주요 관광지 방문 ({planData.destination})</span>
+                        <Clock className="w-4 h-4 text-gray-500" />
+                        <span className="text-gray-700">10:30</span>
+                        <span className="text-gray-900">주요 관광지 방문 ({planData.destination})</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-600">12:30</span>
-                        <span>현지 맛집에서 점심</span>
+                        <Clock className="w-4 h-4 text-gray-500" />
+                        <span className="text-gray-700">12:30</span>
+                        <span className="text-gray-900">현지 맛집에서 점심</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-600">14:00</span>
-                        <span>문화 체험 및 쇼핑</span>
+                        <Clock className="w-4 h-4 text-gray-500" />
+                        <span className="text-gray-700">14:00</span>
+                        <span className="text-gray-900">문화 체험 및 쇼핑</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-600">18:00</span>
-                        <span>저녁 식사 및 야경 감상</span>
+                        <Clock className="w-4 h-4 text-gray-500" />
+                        <span className="text-gray-700">18:00</span>
+                        <span className="text-gray-900">저녁 식사 및 야경 감상</span>
                       </div>
                     </div>
                   </div>
@@ -315,7 +315,7 @@ export function ResultStep() {
 
       <div className="bg-green-50 p-4 rounded-lg">
         <h4 className="font-medium text-green-900 mb-2">🎉 여행 일정 완성!</h4>
-        <p className="text-sm text-green-700">
+        <p className="text-sm text-green-800">
           AI가 생성한 맞춤 일정이 마음에 드시나요? 
           실제 여행에서는 현지 상황에 따라 유연하게 조정하시기 바랍니다.
           카카오맵을 통해 더 자세한 경로와 교통편을 확인할 수 있습니다.
