@@ -41,17 +41,19 @@ export const loadKakaoMapScript = (): Promise<void> => {
 
     const script = document.createElement('script');
     script.async = true;
-    // 환경변수가 로드되지 않으면 직접 설정한 키 사용
-    const apiKey = process.env.NEXT_PUBLIC_KAKAO_MAP_API_KEY || KAKAO_API_KEY;
+    // 하드코딩된 키를 우선 사용
+    const apiKey = KAKAO_API_KEY;
     script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${apiKey}&autoload=false`;
     
     script.onload = () => {
       window.kakao.maps.load(() => {
+        console.log('카카오 지도 로드 완료');
         resolve();
       });
     };
     
     script.onerror = () => {
+      console.error('카카오 지도 스크립트 로드 실패');
       reject(new Error('카카오 지도 스크립트 로드에 실패했습니다.'));
     };
 

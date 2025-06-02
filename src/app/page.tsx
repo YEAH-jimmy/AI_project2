@@ -9,8 +9,8 @@ import { useState, useEffect } from 'react';
 
 // 이미지 URL 상수
 const HERO_BG = 'https://images.unsplash.com/photo-1566552881560-0be862a7c445?q=80&w=2070&auto=format&fit=crop';
-const JEJU_IMG = 'https://images.unsplash.com/photo-1601555048922-64152361aef0?q=80&w=2070&auto=format&fit=crop';
-const BUSAN_IMG = 'https://images.unsplash.com/photo-1578037571252-e9e38f1e5e49?q=80&w=2070&auto=format&fit=crop';
+const JEJU_IMG = 'https://picsum.photos/800/600?random=1';
+const BUSAN_IMG = 'https://picsum.photos/800/600?random=2';
 const SEOUL_IMG = 'https://images.unsplash.com/photo-1603852452378-a4e8d84324a2?q=80&w=2134&auto=format&fit=crop';
 
 // 추천 여행지 데이터

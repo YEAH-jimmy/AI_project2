@@ -5,14 +5,14 @@ export interface TravelPlanData {
   destination?: string
   startDate?: Date
   endDate?: Date
-  accommodationType?: 'hotel' | 'guesthouse' | 'pension' | 'airbnb' | 'camping'
+  accommodationType?: 'hotel' | 'airbnb' | 'guesthouse' | 'resort' | 'other'
   accommodationLocation?: {
     address: string
     lat?: number
     lng?: number
   }
-  intercityTransport?: 'ktx' | 'bus' | 'airplane' | 'car' | 'ferry'
-  localTransport?: 'public' | 'taxi' | 'rental' | 'walk'
+  intercityTransport?: 'ktx' | 'bus' | 'car' | 'airplane' | 'other'
+  localTransport?: 'public' | 'walk' | 'bicycle' | 'rental-car' | 'other'
   travelers?: number
   ageGroups?: string[]
   interests?: string[]
@@ -133,6 +133,7 @@ export const useTravelPlannerStore = create<TravelPlannerState>()(
       }),
       {
         name: 'travel-planner-storage',
+        skipHydration: true,
         // 저장 시 Date 객체 처리
         serialize: (state) => {
           return JSON.stringify(state);

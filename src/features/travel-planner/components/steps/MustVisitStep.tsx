@@ -15,7 +15,7 @@ export function MustVisitStep() {
 
   const handleAddPlace = () => {
     if (newPlace.trim()) {
-      setMustVisitPlaces(prev => [...prev, { name: newPlace.trim() }])
+      setMustVisitPlaces(prev => [...prev, newPlace.trim()])
       setNewPlace('')
     }
   }
@@ -95,7 +95,7 @@ export function MustVisitStep() {
                     <div className="flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-blue-600" />
                       <span className="text-sm font-medium text-blue-900">
-                        {place.name}
+                        {place}
                       </span>
                     </div>
                     <Button

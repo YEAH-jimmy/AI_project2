@@ -37,20 +37,26 @@ export function KakaoMap({
   useEffect(() => {
     const initMap = async () => {
       try {
+        console.log('카카오 지도 초기화 시작');
         await loadKakaoMapScript()
         
-        if (!mapRef.current) return
+        if (!mapRef.current) {
+          console.log('mapRef.current가 없음');
+          return;
+        }
 
+        console.log('지도 인스턴스 생성 중...');
         const options = {
           center: new window.kakao.maps.LatLng(center.lat, center.lng),
           level: level
         }
 
         mapInstanceRef.current = new window.kakao.maps.Map(mapRef.current, options)
+        console.log('지도 인스턴스 생성 완료');
         setIsLoaded(true)
       } catch (err) {
         console.error('카카오 지도 초기화 실패:', err)
-        setError('지도를 불러올 수 없습니다. API 키를 확인해주세요.')
+        setError('지도를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.')
       }
     }
 

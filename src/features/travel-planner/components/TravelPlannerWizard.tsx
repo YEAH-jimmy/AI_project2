@@ -17,20 +17,33 @@ import { useEffect, useState } from 'react'
 export function TravelPlannerWizard() {
   const { currentStep, setCurrentStep } = useTravelPlannerStore()
   const [loading, setLoading] = useState(false)
+  const [isHydrated, setIsHydrated] = useState(false)
+  
+  // hydration 완료 후에만 실제 상태 표시
+  useEffect(() => {
+    setIsHydrated(true)
+  }, [])
+  
+  // hydration이 완료되지 않았으면 첫 번째 단계로 표시
+  const displayStep = isHydrated ? currentStep : 1
   
   // 단계 변경 디버깅
   useEffect(() => {
-    console.log(`Current step: ${currentStep}`)
-  }, [currentStep])
+    if (isHydrated) {
+      console.log(`Current step: ${displayStep}`)
+    }
+  }, [displayStep, isHydrated])
 
   // 컴포넌트 전환 시 로딩 효과
   useEffect(() => {
-    setLoading(true)
-    const timer = setTimeout(() => {
-      setLoading(false)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [currentStep])
+    if (isHydrated) {
+      setLoading(true)
+      const timer = setTimeout(() => {
+        setLoading(false)
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  }, [displayStep, isHydrated])
 
   const handleReset = () => {
     if (window.confirm('모든 입력 정보가 초기화됩니다. 계속하시겠습니까?')) {
@@ -40,7 +53,7 @@ export function TravelPlannerWizard() {
 
   // 현재 단계에 맞는 컴포넌트 렌더링
   const renderStepComponent = () => {
-    if (loading) {
+    if (!isHydrated || loading) {
       return (
         <div className="flex justify-center items-center py-20">
           <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
@@ -48,7 +61,7 @@ export function TravelPlannerWizard() {
       )
     }
 
-    switch (currentStep) {
+    switch (displayStep) {
       case 1:
         return <DateSelectionStep />
       case 2:
@@ -76,7 +89,7 @@ export function TravelPlannerWizard() {
     <div>
       {renderStepComponent()}
       
-      {currentStep > 1 && currentStep < 9 && (
+      {isHydrated && displayStep > 1 && displayStep < 9 && (
         <div className="mt-8 text-center">
           <Button 
             variant="link" 

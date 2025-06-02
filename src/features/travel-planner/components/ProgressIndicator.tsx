@@ -3,6 +3,7 @@
 import { useTravelPlannerStore } from '@/lib/stores/travel-planner-store'
 import { cn } from '@/lib/utils'
 import { Check } from 'lucide-react'
+import { useState, useEffect } from 'react'
 
 const steps = [
   { id: 1, title: '날짜 선택', description: '여행 기간 설정' },
@@ -17,6 +18,15 @@ const steps = [
 
 export function ProgressIndicator() {
   const { currentStep } = useTravelPlannerStore()
+  const [isHydrated, setIsHydrated] = useState(false)
+  
+  // hydration 완료 후에만 실제 상태 표시
+  useEffect(() => {
+    setIsHydrated(true)
+  }, [])
+  
+  // hydration이 완료되지 않았으면 첫 번째 단계로 표시
+  const displayStep = isHydrated ? currentStep : 1
 
   return (
     <div className="w-full">
@@ -29,14 +39,14 @@ export function ProgressIndicator() {
                 <div
                   className={cn(
                     "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all",
-                    currentStep > step.id
+                    isHydrated && displayStep > step.id
                       ? "bg-green-500 border-green-500 text-white"
-                      : currentStep === step.id
+                      : isHydrated && displayStep === step.id
                       ? "bg-blue-500 border-blue-500 text-white"
                       : "bg-white border-gray-300 text-gray-400"
                   )}
                 >
-                  {currentStep > step.id ? (
+                  {isHydrated && displayStep > step.id ? (
                     <Check className="w-5 h-5" />
                   ) : (
                     <span className="text-sm font-medium">{step.id}</span>
@@ -46,7 +56,7 @@ export function ProgressIndicator() {
                   <p
                     className={cn(
                       "text-sm font-medium",
-                      currentStep >= step.id ? "text-gray-900" : "text-gray-400"
+                      isHydrated && displayStep >= step.id ? "text-gray-900" : "text-gray-400"
                     )}
                   >
                     {step.title}
@@ -60,7 +70,7 @@ export function ProgressIndicator() {
                 <div
                   className={cn(
                     "flex-1 h-0.5 mx-4 transition-all",
-                    currentStep > step.id
+                    isHydrated && displayStep > step.id
                       ? "bg-green-500"
                       : "bg-gray-300"
                   )}
@@ -75,20 +85,20 @@ export function ProgressIndicator() {
       <div className="md:hidden">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-medium text-gray-900">
-            {steps[currentStep - 1]?.title}
+            {steps[displayStep - 1]?.title || '날짜 선택'}
           </h3>
           <span className="text-sm text-gray-500">
-            {currentStep} / {steps.length}
+            {displayStep} / {steps.length}
           </span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2">
           <div
             className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-            style={{ width: `${(currentStep / steps.length) * 100}%` }}
+            style={{ width: `${(displayStep / steps.length) * 100}%` }}
           />
         </div>
         <p className="text-sm text-gray-600 mt-2">
-          {steps[currentStep - 1]?.description}
+          {steps[displayStep - 1]?.description || '여행 기간 설정'}
         </p>
       </div>
     </div>
