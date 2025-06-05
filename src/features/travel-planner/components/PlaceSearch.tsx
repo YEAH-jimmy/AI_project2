@@ -31,6 +31,7 @@ export function PlaceSearch({
   const [results, setResults] = useState<KakaoPlace[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const searchRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -39,18 +40,26 @@ export function PlaceSearch({
     if (!searchQuery.trim()) {
       setResults([])
       setIsOpen(false)
+      setError(null)
       return
     }
 
     setIsLoading(true)
+    setError(null)
     try {
       const places = await searchPlaces(searchQuery)
       setResults(places)
       setIsOpen(places.length > 0)
+      if (places.length === 0) {
+        setError('검색 결과가 없습니다. 다른 키워드로 검색해보세요.')
+        setIsOpen(true)
+      }
     } catch (error) {
       console.error('장소 검색 실패:', error)
+      const errorMessage = error instanceof Error ? error.message : '장소 검색에 실패했습니다.'
+      setError(errorMessage)
       setResults([])
-      setIsOpen(false)
+      setIsOpen(true)
     } finally {
       setIsLoading(false)
     }
@@ -115,51 +124,57 @@ export function PlaceSearch({
         )}
       </div>
 
-      {isOpen && results.length > 0 && (
-        <Card className="absolute top-full left-0 right-0 z-50 mt-1 max-h-96 overflow-y-auto">
-          <CardContent className="p-0">
-            {results.map((place, index) => (
-              <button
-                key={`${place.id}-${index}`}
-                onClick={() => handlePlaceSelect(place)}
-                className="w-full p-4 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
-              >
-                <div className="space-y-2">
-                  <div className="flex items-start justify-between">
-                    <h4 className="font-medium text-gray-900 text-sm line-clamp-1">
-                      {place.place_name}
-                    </h4>
-                    <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0 ml-2" />
+      {isOpen && (
+        <>
+          {error ? (
+            <Card className="absolute top-full left-0 right-0 z-50 mt-1">
+              <CardContent className="p-4 text-center">
+                <div className="text-sm text-red-600">{error}</div>
+                {error.includes('API') && (
+                  <div className="text-xs text-gray-500 mt-2">
+                    네트워크 상태를 확인하거나 잠시 후 다시 시도해주세요.
                   </div>
-                  
-                  <div className="space-y-1">
-                    <p className="text-xs text-gray-600 line-clamp-1">
-                      {place.category_name}
-                    </p>
-                    <p className="text-xs text-gray-500 line-clamp-1">
-                      {place.road_address_name || place.address_name}
-                    </p>
-                    {place.phone && (
-                      <div className="flex items-center gap-1">
-                        <Phone className="w-3 h-3 text-gray-400" />
-                        <p className="text-xs text-gray-500">{place.phone}</p>
+                )}
+              </CardContent>
+            </Card>
+          ) : results.length > 0 ? (
+            <Card className="absolute top-full left-0 right-0 z-50 mt-1 max-h-96 overflow-y-auto">
+              <CardContent className="p-0">
+                {results.map((place, index) => (
+                  <button
+                    key={`${place.id}-${index}`}
+                    onClick={() => handlePlaceSelect(place)}
+                    className="w-full p-4 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between">
+                        <h4 className="font-medium text-gray-900 text-sm line-clamp-1">
+                          {place.place_name}
+                        </h4>
+                        <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0 ml-2" />
                       </div>
-                    )}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {isOpen && results.length === 0 && !isLoading && query.trim() && (
-        <Card className="absolute top-full left-0 right-0 z-50 mt-1">
-          <CardContent className="p-4 text-center text-gray-500">
-            <p className="text-sm">검색 결과가 없습니다.</p>
-            <p className="text-xs mt-1">다른 키워드로 검색해보세요.</p>
-          </CardContent>
-        </Card>
+                      
+                      <div className="space-y-1">
+                        <p className="text-xs text-gray-600 line-clamp-1">
+                          {place.category_name}
+                        </p>
+                        <p className="text-xs text-gray-500 line-clamp-1">
+                          {place.road_address_name || place.address_name}
+                        </p>
+                        {place.phone && (
+                          <div className="flex items-center gap-1">
+                            <Phone className="w-3 h-3 text-gray-400" />
+                            <p className="text-xs text-gray-500">{place.phone}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
+        </>
       )}
     </div>
   )

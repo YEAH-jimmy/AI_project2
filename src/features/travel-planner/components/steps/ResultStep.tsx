@@ -18,9 +18,11 @@ import {
   CheckCircle,
   Map,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Star
 } from 'lucide-react'
 import { KakaoMap } from '../KakaoMap'
+import { getPopularPlacesByRegion, RecommendedPlace } from '@/lib/place-recommendation'
 
 // 샘플 여행지 데이터 (실제로는 AI가 생성)
 const sampleDestinations = [
@@ -30,22 +32,124 @@ const sampleDestinations = [
   { lat: 37.5547, lng: 126.9707, name: '남산타워', description: '서울의 랜드마크' },
 ]
 
+// 시간대별 장소 정렬 함수
+const sortPlacesByTimeAndType = (places: RecommendedPlace[]) => {
+  const morningTypes = ['attraction', 'culture']
+  const lunchTypes = ['food']
+  const afternoonTypes = ['shopping', 'attraction', 'culture']
+  const dinnerTypes = ['food']
+  const eveningTypes = ['attraction', 'nightlife']
+  
+  const categorized = {
+    morning: places.filter(p => morningTypes.includes(categorizePlace(p.category))),
+    lunch: places.filter(p => lunchTypes.includes(categorizePlace(p.category))),
+    afternoon: places.filter(p => afternoonTypes.includes(categorizePlace(p.category))),
+    dinner: places.filter(p => dinnerTypes.includes(categorizePlace(p.category))),
+    evening: places.filter(p => eveningTypes.includes(categorizePlace(p.category)))
+  }
+  
+  const result = []
+  
+  // 오전 (2개)
+  result.push(...categorized.morning.slice(0, 2))
+  // 점심 (1개)
+  result.push(...categorized.lunch.slice(0, 1))
+  // 오후 (3개)
+  result.push(...categorized.afternoon.slice(0, 3))
+  // 저녁 (1개)
+  result.push(...categorized.dinner.slice(1, 2)) // 점심과 다른 식당
+  // 야간 (1개)
+  result.push(...categorized.evening.slice(0, 1))
+  
+  // 부족한 경우 남은 장소로 채우기
+  const used = new Set(result.map(p => p.id))
+  const remaining = places.filter(p => !used.has(p.id))
+  result.push(...remaining.slice(0, 8 - result.length))
+  
+  return result.slice(0, 8)
+}
+
+// 시간 슬롯 생성
+const generateTimeSlot = (index: number): string => {
+  const timeSlots = [
+    '09:00', '10:30', '12:00', '14:00', '15:30', '17:00', '18:30', '20:00'
+  ]
+  return timeSlots[index] || `${9 + index}:00`
+}
+
+// 장소 카테고리 분류
+const categorizePlace = (category: string): string => {
+  if (category.includes('음식점') || category.includes('카페') || category.includes('디저트')) {
+    return 'food'
+  }
+  if (category.includes('관광') || category.includes('명소') || category.includes('공원')) {
+    return 'attraction'
+  }
+  if (category.includes('쇼핑') || category.includes('시장') || category.includes('백화점')) {
+    return 'shopping'
+  }
+  if (category.includes('박물관') || category.includes('미술관') || category.includes('문화')) {
+    return 'culture'
+  }
+  if (category.includes('숙박') || category.includes('호텔')) {
+    return 'accommodation'
+  }
+  if (category.includes('교통') || category.includes('역') || category.includes('터미널')) {
+    return 'transport'
+  }
+  if (category.includes('야경') || category.includes('클럽') || category.includes('바')) {
+    return 'nightlife'
+  }
+  return 'attraction' // 기본값
+}
+
 export function ResultStep() {
   const { planData, setCurrentStep, resetPlanData, setIsGenerating, isGenerating } = useTravelPlannerStore()
   const [generationComplete, setGenerationComplete] = useState(false)
   const [showMap, setShowMap] = useState(true) // 기본적으로 지도 표시
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true) // 왼쪽 패널 상태
+  const [recommendedPlaces, setRecommendedPlaces] = useState<RecommendedPlace[]>([])
+  const [loadingPlaces, setLoadingPlaces] = useState(false)
+  const [placeSearchError, setPlaceSearchError] = useState<string | null>(null)
 
   useEffect(() => {
     // AI 일정 생성 시뮬레이션
     setIsGenerating(true)
-    const timer = setTimeout(() => {
+    setPlaceSearchError(null)
+    
+    const generateRecommendations = async () => {
+      if (planData.destination && planData.interests) {
+        setLoadingPlaces(true)
+        try {
+          console.log('장소 추천 시작:', planData.destination, planData.interests)
+          const places = await getPopularPlacesByRegion(
+            planData.destination,
+            planData.interests,
+            20 // 더 많은 장소 가져오기
+          )
+          setRecommendedPlaces(places)
+          console.log('추천 장소 성공:', places.length, '개')
+          setPlaceSearchError(null)
+        } catch (error) {
+          console.error('장소 추천 오류:', error)
+          const errorMessage = error instanceof Error ? error.message : '장소 검색에 실패했습니다.'
+          setPlaceSearchError(errorMessage)
+          // 에러가 발생해도 빈 배열로 진행 (기본 일정 표시)
+          setRecommendedPlaces([])
+        }
+        setLoadingPlaces(false)
+      }
+    }
+    
+    // 3초 후 완료
+    const timer = setTimeout(async () => {
+      await generateRecommendations()
       setIsGenerating(false)
       setGenerationComplete(true)
-    }, 3000) // 3초 후 완료
+    }, 3000)
 
     return () => clearTimeout(timer)
-  }, [setIsGenerating])
+  }, [setIsGenerating, planData.destination, planData.interests])
 
   const handlePrevious = () => {
     setCurrentStep(8)
@@ -82,6 +186,16 @@ export function ResultStep() {
   }
 
   const getDestinationMarkers = () => {
+    // 추천된 장소들이 있으면 사용
+    if (recommendedPlaces.length > 0) {
+      return recommendedPlaces.slice(0, 10).map(place => ({
+        lat: place.lat,
+        lng: place.lng,
+        name: place.name,
+        description: `${place.category} ${place.matchScore ? `(매칭도: ${place.matchScore}점)` : ''}`
+      }))
+    }
+    
     // 실제로는 AI가 생성한 일정에서 마커를 만들어야 함
     const center = getMapCenter()
     
@@ -123,12 +237,27 @@ export function ResultStep() {
               <div className="space-y-2">
                 <p className="text-lg font-medium text-gray-900">AI 분석 중...</p>
                 <p className="text-sm text-gray-700">
-                  📍 최적 경로 계산<br />
-                  🏨 숙소 및 맛집 추천<br />
+                  📍 카카오맵 기반 장소 검색<br />
+                  🎯 사용자 선호도 분석<br />
+                  ⭐ 장소별 평점 및 리뷰 수집<br />
+                  🗺️ 최적 경로 계산<br />
                   ⏰ 시간표 최적화<br />
-                  💰 예산 맞춤 조정<br />
-                  🗺️ 카카오맵 경로 생성
+                  💰 예산 맞춤 조정
                 </p>
+                {loadingPlaces && (
+                  <p className="text-xs text-blue-600 mt-2">
+                    🔍 {planData.destination}의 맞춤 장소를 찾는 중...
+                  </p>
+                )}
+                {placeSearchError && (
+                  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-xs text-yellow-800">
+                      ⚠️ 실시간 장소 검색에 문제가 발생했습니다.<br />
+                      <span className="text-yellow-600">{placeSearchError}</span><br />
+                      기본 일정으로 진행합니다.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
@@ -139,6 +268,22 @@ export function ResultStep() {
 
   return (
     <div className="space-y-6">
+      {/* 에러 알림 */}
+      {placeSearchError && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 text-yellow-600">⚠️</div>
+            <div className="text-sm">
+              <p className="font-medium text-yellow-800">실시간 장소 검색에 문제가 발생했습니다</p>
+              <p className="text-yellow-700 mt-1">{placeSearchError}</p>
+              <p className="text-yellow-600 text-xs mt-1">
+                아래 일정은 기본 추천 장소로 구성되었습니다. 브라우저를 새로고침하면 다시 시도할 수 있습니다.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* 여행 정보 요약 */}
       <Card className="max-w-4xl mx-auto">
         <CardHeader>
@@ -212,12 +357,12 @@ export function ResultStep() {
           )}
         </Button>
 
-        <div className={`grid gap-6 transition-all duration-300 h-[800px] ${
-          isLeftPanelOpen ? 'lg:grid-cols-12' : 'lg:grid-cols-1'
-        }`}>
+        <div className="flex gap-6 h-[800px]">
           {/* 왼쪽: AI 추천 일정 */}
-          {isLeftPanelOpen && (
-            <div className="lg:col-span-5">
+          <div className={`transition-all duration-300 ease-in-out ${
+            isLeftPanelOpen ? 'w-2/5 opacity-100' : 'w-0 opacity-0 overflow-hidden'
+          }`}>
+            {isLeftPanelOpen && (
               <Card className="h-full">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-gray-900">
@@ -227,135 +372,224 @@ export function ResultStep() {
                 </CardHeader>
                 <CardContent className="h-[calc(100%-5rem)] overflow-y-auto">
                   <div className="space-y-6">
-                    {planData.startDate && planData.endDate && (
-                      Array.from({ 
-                        length: Math.ceil((new Date(planData.endDate).getTime() - new Date(planData.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1 
-                      }).map((_, dayIndex) => {
-                        const currentDate = new Date(new Date(planData.startDate!).getTime() + dayIndex * 24 * 60 * 60 * 1000)
-                        
-                        // 여행지별 구체적인 일정 데이터
-                        const getSpecificItinerary = (destination: string, day: number) => {
-                          const itineraries: { [key: string]: { [key: number]: any[] } } = {
-                            '제주도': {
-                              0: [
-                                { time: '09:00', activity: '제주공항 도착 및 렌터카 픽업', location: '제주국제공항', type: 'transport' },
-                                { time: '10:30', activity: '성산일출봉', location: '서귀포시 성산읍', type: 'attraction', description: '유네스코 세계자연유산, 화산분화구' },
-                                { time: '12:30', activity: '성산포 맛집 점심', location: '성산일출봉 맛집 "일출봉횟집"', type: 'food', description: '신선한 제주 해산물 정식' },
-                                { time: '14:00', activity: '우도 페리 이용', location: '성산포항 → 우도', type: 'transport' },
-                                { time: '15:00', activity: '우도 관광 (땅콩아이스크림, 해안도로)', location: '우도', type: 'attraction' },
-                                { time: '17:00', activity: '제주시내 이동 및 체크인', location: '제주시내 숙소', type: 'accommodation' },
-                                { time: '19:00', activity: '제주 흑돼지 맛집 저녁', location: '돈사돈 제주본점', type: 'food', description: '제주 대표 흑돼지 구이' }
-                              ],
-                              1: [
-                                { time: '09:00', activity: '한라산 국립공원', location: '어리목 탐방로', type: 'attraction', description: '한라산 등반 (어리목 → 윗세오름)' },
-                                { time: '12:00', activity: '산채정식 점심', location: '어리목 주변 "산채원"', type: 'food', description: '제주 산나물 정식' },
-                                { time: '14:00', activity: '제주 신화월드', location: '서귀포시 안덕면', type: 'attraction', description: '테마파크 및 쇼핑' },
-                                { time: '16:30', activity: '중문관광단지 해변산책', location: '중문색달해수욕장', type: 'attraction' },
-                                { time: '18:00', activity: '해산물 뷔페 저녁', location: '중문 "더클리프"', type: 'food', description: '오션뷰 해산물 뷔페' },
-                                { time: '20:00', activity: '제주 야시장 구경', location: '동문시장 야시장', type: 'shopping', description: '제주 특산품 쇼핑' }
-                              ]
-                            },
-                            '부산': {
-                              0: [
-                                { time: '09:00', activity: 'KTX 부산역 도착', location: '부산역', type: 'transport' },
-                                { time: '10:00', activity: '감천문화마을', location: '사하구 감천동', type: 'attraction', description: '부산의 마추픽추, 알록달록한 골목길' },
-                                { time: '12:00', activity: '토성동 맛집 점심', location: '토성동 "할매국수"', type: 'food', description: '부산 대표 밀면' },
-                                { time: '14:00', activity: '송도해상케이블카', location: '서구 송도해수욕장', type: 'attraction', description: '바다 위를 가로지르는 케이블카' },
-                                { time: '16:00', activity: '국제시장 & 부평깡통시장', location: '중구 국제시장', type: 'shopping', description: '부산 전통시장 탐방' },
-                                { time: '18:00', activity: '자갈치시장 해산물 저녁', location: '자갈치시장 2층 식당가', type: 'food', description: '신선한 회와 해산물탕' },
-                                { time: '20:00', activity: '부산항대교 야경', location: '영도대교', type: 'attraction', description: '부산 야경 명소' }
-                              ],
-                              1: [
-                                { time: '09:00', activity: '해동 용궁사', location: '기장군 기장읍', type: 'attraction', description: '바다 위에 지어진 아름다운 사찰' },
-                                { time: '11:00', activity: '해운대해수욕장', location: '해운대구', type: 'attraction', description: '부산 대표 해수욕장' },
-                                { time: '12:30', activity: '해운대 맛집 점심', location: '해운대 "금수복국"', type: 'food', description: '부산식 복어요리 전문점' },
-                                { time: '14:30', activity: '달맞이길 & 청사포', location: '해운대구 달맞이길', type: 'attraction', description: '해안 드라이브 코스' },
-                                { time: '16:00', activity: '광안리해수욕장', location: '수영구 광안동', type: 'attraction', description: '광안대교 뷰가 아름다운 해변' },
-                                { time: '18:00', activity: '광안리 회센터 저녁', location: '광안리 회센터', type: 'food', description: '광안대교 야경을 보며 즐기는 회' },
-                                { time: '20:30', activity: '광안대교 야경 감상', location: '광안리해수욕장', type: 'attraction' }
-                              ]
-                            },
-                            '서울': {
-                              0: [
-                                { time: '09:00', activity: '경복궁 관람', location: '종로구 사직로', type: 'attraction', description: '조선왕조 대표 궁궐, 수문장 교대식' },
-                                { time: '11:00', activity: '북촌한옥마을', location: '종로구 계동', type: 'attraction', description: '전통 한옥이 보존된 마을' },
-                                { time: '12:30', activity: '인사동 맛집 점심', location: '인사동 "진주회관"', type: 'food', description: '전통 한정식' },
-                                { time: '14:00', activity: '명동 쇼핑', location: '중구 명동', type: 'shopping', description: '한국 대표 쇼핑거리' },
-                                { time: '16:00', activity: 'N서울타워', location: '용산구 남산공원길', type: 'attraction', description: '서울 랜드마크, 서울 전경 조망' },
-                                { time: '18:00', activity: '남산골한옥마을 저녁', location: '중구 필동', type: 'food', description: '전통 한식당가' },
-                                { time: '20:00', activity: '청계천 야경산책', location: '중구 청계천로', type: 'attraction', description: '도심 속 하천 산책로' }
-                              ],
-                              1: [
-                                { time: '09:00', activity: '창덕궁 & 후원', location: '종로구 율곡로', type: 'attraction', description: '유네스코 세계문화유산' },
-                                { time: '11:30', activity: '홍대 거리', location: '마포구 홍익로', type: 'attraction', description: '젊음의 거리, 거리공연' },
-                                { time: '12:30', activity: '홍대 맛집 점심', location: '홍대 "노가리골목"', type: 'food', description: '다양한 포장마차 음식' },
-                                { time: '14:30', activity: '한강공원 (여의도)', location: '영등포구 여의동로', type: 'attraction', description: '한강 자전거 라이딩' },
-                                { time: '16:30', activity: '63빌딩 전망대', location: '영등포구 63로', type: 'attraction', description: '한강과 서울 시내 전망' },
-                                { time: '18:30', activity: '강남역 맛집 저녁', location: '강남역 "본죽&비빔밥"', type: 'food', description: '한국식 퓨전 요리' },
-                                { time: '20:30', activity: '반포무지개다리 분수쇼', location: '서초구 반포한강공원', type: 'attraction', description: '음악 분수 쇼' }
-                              ]
-                            }
-                          }
+                    {planData.startDate && planData.endDate ? (
+                      (() => {
+                        try {
+                          const startDate = new Date(planData.startDate);
+                          const endDate = new Date(planData.endDate);
+                          const dayCount = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
                           
-                          return itineraries[destination]?.[day] || [
-                            { time: '09:00', activity: '호텔 조식 및 체크아웃', location: '숙소', type: 'accommodation' },
-                            { time: '10:30', activity: `${destination} 주요 관광지 방문`, location: destination, type: 'attraction' },
-                            { time: '12:30', activity: '현지 맛집에서 점심', location: `${destination} 맛집`, type: 'food' },
-                            { time: '14:00', activity: '문화 체험 및 쇼핑', location: `${destination} 쇼핑가`, type: 'shopping' },
-                            { time: '18:00', activity: '저녁 식사 및 야경 감상', location: `${destination} 야경 명소`, type: 'food' }
-                          ]
-                        }
-                        
-                        const dayItinerary = getSpecificItinerary(planData.destination || '서울', dayIndex)
-                        
-                        const getActivityIcon = (type: string) => {
-                          switch (type) {
-                            case 'food': return '🍽️'
-                            case 'attraction': return '🏛️'
-                            case 'shopping': return '🛍️'
-                            case 'transport': return '🚗'
-                            case 'accommodation': return '🏨'
-                            default: return '📍'
-                          }
-                        }
-                        
-                        return (
-                          <div key={dayIndex} className="border-l-4 border-blue-500 pl-6">
-                            <h4 className="font-semibold text-gray-900 mb-4 text-lg">
-                              {format(currentDate, 'M월 d일 (EEE)', { locale: ko })}
-                            </h4>
-                            <div className="space-y-3">
-                              {dayItinerary.map((item, itemIndex) => (
-                                <div key={itemIndex} className="bg-gray-50 rounded-lg p-3">
-                                  <div className="flex items-start gap-3">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <Clock className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                                      <span className="text-gray-700 font-medium">{item.time}</span>
-                                      <span className="text-lg">{getActivityIcon(item.type)}</span>
+                          return Array.from({ length: dayCount }).map((_, dayIndex) => {
+                            const currentDate = new Date(startDate.getTime() + dayIndex * 24 * 60 * 60 * 1000);
+                            
+                            // 여행지별 구체적인 일정 데이터
+                            const getSpecificItinerary = (destination: string, day: number) => {
+                              // 실제 추천된 장소가 있으면 우선 활용
+                              if (recommendedPlaces.length > 0) {
+                                const dayPlaces = recommendedPlaces.slice(day * 8, (day + 1) * 8); // 하루에 8개 장소
+                                
+                                if (dayPlaces.length > 0) {
+                                  // 시간대별로 장소 타입 배치
+                                  const sortedPlaces = sortPlacesByTimeAndType(dayPlaces);
+                                  
+                                  return sortedPlaces.map((place, index) => ({
+                                    time: generateTimeSlot(index),
+                                    activity: place.name,
+                                    location: place.roadAddress || place.address,
+                                    type: categorizePlace(place.category),
+                                    description: place.category,
+                                    rating: place.rating,
+                                    reviewCount: place.reviewCount,
+                                    matchScore: place.matchScore,
+                                    phone: place.phone
+                                  }));
+                                }
+                              }
+                              
+                              // 추천된 장소가 부족하거나 없으면 기본 일정 사용
+                              const itineraries: { [key: string]: { [key: number]: any[] } } = {
+                                '속초': {
+                                  0: [
+                                    { time: '09:00', activity: '속초항 도착 및 체크인', location: '속초항', type: 'transport' },
+                                    { time: '10:00', activity: '속초해수욕장', location: '강원도 속초시 조양동', type: 'attraction', description: '동해안 대표 해수욕장, 설악산 조망' },
+                                    { time: '12:00', activity: '속초중앙시장 맛집', location: '속초중앙시장 "장칼국수"', type: 'food', description: '속초 대표 장칼국수와 순대' },
+                                    { time: '14:00', activity: '설악산 국립공원', location: '설악산 신흥사', type: 'attraction', description: '권금성 케이블카, 신흥사 탐방' },
+                                    { time: '16:30', activity: '속초관광수산시장', location: '속초관광수산시장', type: 'shopping', description: '신선한 해산물과 특산품' },
+                                    { time: '18:00', activity: '닭강정 맛집', location: '속초 "원조 닭강정"', type: 'food', description: '속초 3대 닭강정 맛집' },
+                                    { time: '20:00', activity: '속초해변 야경', location: '속초해수욕장', type: 'attraction', description: '바다 야경과 산책' }
+                                  ],
+                                  1: [
+                                    { time: '09:00', activity: '청초호', location: '속초시 청초호반로', type: 'attraction', description: '청초호 둘레길 산책' },
+                                    { time: '11:00', activity: '외옹치해변', location: '외옹치해변', type: 'attraction', description: '한적한 바다 풍경' },
+                                    { time: '12:30', activity: '해산물 정식', location: '외옹치 "바다횟집"', type: 'food', description: '신선한 회와 해산물탕' },
+                                    { time: '14:30', activity: '낙산해수욕장', location: '양양군 낙산해수욕장', type: 'attraction', description: '낙산사와 해변 탐방' },
+                                    { time: '16:00', activity: '낙산사', location: '낙산사', type: 'attraction', description: '관음보살 기도처, 바다 전망' },
+                                    { time: '18:00', activity: '양양 송이버섯 요리', location: '양양 "송이마을"', type: 'food', description: '양양 특산 송이버섯 요리' },
+                                    { time: '20:00', activity: '낙산해변 일몰', location: '낙산해수욕장', type: 'attraction', description: '동해안 일몰 명소' }
+                                  ]
+                                },
+                                '제주도': {
+                                  0: [
+                                    { time: '09:00', activity: '제주공항 도착 및 렌터카 픽업', location: '제주국제공항', type: 'transport' },
+                                    { time: '10:30', activity: '성산일출봉', location: '서귀포시 성산읍', type: 'attraction', description: '유네스코 세계자연유산, 화산분화구' },
+                                    { time: '12:30', activity: '성산포 맛집 점심', location: '성산일출봉 맛집 "일출봉횟집"', type: 'food', description: '신선한 제주 해산물 정식' },
+                                    { time: '14:00', activity: '우도 페리 이용', location: '성산포항 → 우도', type: 'transport' },
+                                    { time: '15:00', activity: '우도 관광 (땅콩아이스크림, 해안도로)', location: '우도', type: 'attraction' },
+                                    { time: '17:00', activity: '제주시내 이동 및 체크인', location: '제주시내 숙소', type: 'accommodation' },
+                                    { time: '19:00', activity: '제주 흑돼지 맛집 저녁', location: '돈사돈 제주본점', type: 'food', description: '제주 대표 흑돼지 구이' }
+                                  ],
+                                  1: [
+                                    { time: '09:00', activity: '한라산 국립공원', location: '어리목 탐방로', type: 'attraction', description: '한라산 등반 (어리목 → 윗세오름)' },
+                                    { time: '12:00', activity: '산채정식 점심', location: '어리목 주변 "산채원"', type: 'food', description: '제주 산나물 정식' },
+                                    { time: '14:00', activity: '제주 신화월드', location: '서귀포시 안덕면', type: 'attraction', description: '테마파크 및 쇼핑' },
+                                    { time: '16:30', activity: '중문관광단지 해변산책', location: '중문색달해수욕장', type: 'attraction' },
+                                    { time: '18:00', activity: '해산물 뷔페 저녁', location: '중문 "더클리프"', type: 'food', description: '오션뷰 해산물 뷔페' },
+                                    { time: '20:00', activity: '제주 야시장 구경', location: '동문시장 야시장', type: 'shopping', description: '제주 특산품 쇼핑' }
+                                  ]
+                                },
+                                '부산': {
+                                  0: [
+                                    { time: '09:00', activity: 'KTX 부산역 도착', location: '부산역', type: 'transport' },
+                                    { time: '10:00', activity: '감천문화마을', location: '사하구 감천동', type: 'attraction', description: '부산의 마추픽추, 알록달록한 골목길' },
+                                    { time: '12:00', activity: '토성동 맛집 점심', location: '토성동 "할매국수"', type: 'food', description: '부산 대표 밀면' },
+                                    { time: '14:00', activity: '송도해상케이블카', location: '서구 송도해수욕장', type: 'attraction', description: '바다 위를 가로지르는 케이블카' },
+                                    { time: '16:00', activity: '국제시장 & 부평깡통시장', location: '중구 국제시장', type: 'shopping', description: '부산 전통시장 탐방' },
+                                    { time: '18:00', activity: '자갈치시장 해산물 저녁', location: '자갈치시장 2층 식당가', type: 'food', description: '신선한 회와 해산물탕' },
+                                    { time: '20:00', activity: '부산항대교 야경', location: '영도대교', type: 'attraction', description: '부산 야경 명소' }
+                                  ],
+                                  1: [
+                                    { time: '09:00', activity: '해동 용궁사', location: '기장군 기장읍', type: 'attraction', description: '바다 위에 지어진 아름다운 사찰' },
+                                    { time: '11:00', activity: '해운대해수욕장', location: '해운대구', type: 'attraction', description: '부산 대표 해수욕장' },
+                                    { time: '12:30', activity: '해운대 맛집 점심', location: '해운대 "금수복국"', type: 'food', description: '부산식 복어요리 전문점' },
+                                    { time: '14:30', activity: '달맞이길 & 청사포', location: '해운대구 달맞이길', type: 'attraction', description: '해안 드라이브 코스' },
+                                    { time: '16:00', activity: '광안리해수욕장', location: '수영구 광안동', type: 'attraction', description: '광안대교 뷰가 아름다운 해변' },
+                                    { time: '18:00', activity: '광안리 회센터 저녁', location: '광안리 회센터', type: 'food', description: '광안대교 야경을 보며 즐기는 회' },
+                                    { time: '20:30', activity: '광안대교 야경 감상', location: '광안리해수욕장', type: 'attraction' }
+                                  ]
+                                },
+                                '서울': {
+                                  0: [
+                                    { time: '09:00', activity: '경복궁 관람', location: '종로구 사직로', type: 'attraction', description: '조선왕조 대표 궁궐, 수문장 교대식' },
+                                    { time: '11:00', activity: '북촌한옥마을', location: '종로구 계동', type: 'attraction', description: '전통 한옥이 보존된 마을' },
+                                    { time: '12:30', activity: '인사동 맛집 점심', location: '인사동 "진주회관"', type: 'food', description: '전통 한정식' },
+                                    { time: '14:00', activity: '명동 쇼핑', location: '중구 명동', type: 'shopping', description: '한국 대표 쇼핑거리' },
+                                    { time: '16:00', activity: 'N서울타워', location: '용산구 남산공원길', type: 'attraction', description: '서울 랜드마크, 서울 전경 조망' },
+                                    { time: '18:00', activity: '남산골한옥마을 저녁', location: '중구 필동', type: 'food', description: '전통 한식당가' },
+                                    { time: '20:00', activity: '청계천 야경산책', location: '중구 청계천로', type: 'attraction', description: '도심 속 하천 산책로' }
+                                  ],
+                                  1: [
+                                    { time: '09:00', activity: '창덕궁 & 후원', location: '종로구 율곡로', type: 'attraction', description: '유네스코 세계문화유산' },
+                                    { time: '11:30', activity: '홍대 거리', location: '마포구 홍익로', type: 'attraction', description: '젊음의 거리, 거리공연' },
+                                    { time: '12:30', activity: '홍대 맛집 점심', location: '홍대 "노가리골목"', type: 'food', description: '다양한 포장마차 음식' },
+                                    { time: '14:30', activity: '한강공원 (여의도)', location: '영등포구 여의동로', type: 'attraction', description: '한강 자전거 라이딩' },
+                                    { time: '16:30', activity: '63빌딩 전망대', location: '영등포구 63로', type: 'attraction', description: '한강과 서울 시내 전망' },
+                                    { time: '18:30', activity: '강남역 맛집 저녁', location: '강남역 "본죽&비빔밥"', type: 'food', description: '한국식 퓨전 요리' },
+                                    { time: '20:30', activity: '반포무지개다리 분수쇼', location: '서초구 반포한강공원', type: 'attraction', description: '음악 분수 쇼' }
+                                  ]
+                                }
+                              };
+                              
+                              return itineraries[destination]?.[day] || [
+                                { time: '09:00', activity: '호텔 조식 및 체크아웃', location: '숙소', type: 'accommodation' },
+                                { time: '10:30', activity: `${destination} 주요 관광지 방문`, location: destination, type: 'attraction' },
+                                { time: '12:30', activity: '현지 맛집에서 점심', location: `${destination} 맛집`, type: 'food' },
+                                { time: '14:00', activity: '문화 체험 및 쇼핑', location: `${destination} 쇼핑가`, type: 'shopping' },
+                                { time: '18:00', activity: '저녁 식사 및 야경 감상', location: `${destination} 야경 명소`, type: 'food' }
+                              ];
+                            };
+                            
+                            const dayItinerary = getSpecificItinerary(planData.destination || '서울', dayIndex);
+                            
+                            const getActivityIcon = (type: string) => {
+                              switch (type) {
+                                case 'food': return '🍽️';
+                                case 'attraction': return '🏛️';
+                                case 'shopping': return '🛍️';
+                                case 'transport': return '🚗';
+                                case 'accommodation': return '🏨';
+                                default: return '📍';
+                              }
+                            };
+                            
+                            return (
+                              <div key={dayIndex} className="border-l-4 border-blue-500 pl-6">
+                                <h4 className="font-semibold text-gray-900 mb-4 text-lg">
+                                  {format(currentDate, 'M월 d일 (EEE)', { locale: ko })}
+                                </h4>
+                                <div className="space-y-3">
+                                  {dayItinerary.map((item, itemIndex) => (
+                                    <div key={itemIndex} className="bg-gray-50 rounded-lg p-3 hover:bg-gray-100 transition-colors">
+                                      <div className="flex items-start gap-3">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <Clock className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                                          <span className="text-gray-700 font-medium">{item.time}</span>
+                                          <span className="text-lg">{getActivityIcon(item.type)}</span>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                            <h5 className="font-medium text-gray-900">{item.activity}</h5>
+                                            {item.rating && (
+                                              <div className="flex items-center gap-1 bg-yellow-50 px-2 py-0.5 rounded-full">
+                                                <Star className="w-3 h-3 text-yellow-500 fill-current" />
+                                                <span className="text-xs text-yellow-700 font-medium">{item.rating}</span>
+                                                {item.reviewCount && (
+                                                  <span className="text-xs text-yellow-600">({item.reviewCount})</span>
+                                                )}
+                                              </div>
+                                            )}
+                                            {item.matchScore && item.matchScore > 70 && (
+                                              <div className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                                                추천 {Math.round(item.matchScore)}점
+                                              </div>
+                                            )}
+                                            {item.phone && (
+                                              <div className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
+                                                📞
+                                              </div>
+                                            )}
+                                          </div>
+                                          <p className="text-sm text-gray-600 mb-1">📍 {item.location}</p>
+                                          {item.description && (
+                                            <p className="text-sm text-gray-500">{item.description}</p>
+                                          )}
+                                          {item.rating && item.rating >= 4.5 && (
+                                            <div className="mt-1 text-xs text-green-600 font-medium">
+                                              ⭐ 높은 평점의 추천 장소입니다!
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                      <h5 className="font-medium text-gray-900 mb-1">{item.activity}</h5>
-                                      <p className="text-sm text-gray-600 mb-1">📍 {item.location}</p>
-                                      {item.description && (
-                                        <p className="text-sm text-gray-500">{item.description}</p>
-                                      )}
-                                    </div>
-                                  </div>
+                                  ))}
                                 </div>
-                              ))}
+                              </div>
+                            );
+                          });
+                        } catch (error) {
+                          console.error('날짜 계산 오류:', error);
+                          return (
+                            <div className="text-center py-8">
+                              <p className="text-gray-500">날짜 정보를 불러오는 중 오류가 발생했습니다.</p>
+                              <p className="text-sm text-gray-400 mt-1">여행 기간을 다시 설정해주세요.</p>
                             </div>
-                          </div>
-                        )
-                      })
+                          );
+                        }
+                      })()
+                    ) : (
+                      <div className="text-center py-8">
+                        <p className="text-gray-500">여행 날짜가 설정되지 않았습니다.</p>
+                      </div>
                     )}
                   </div>
                 </CardContent>
               </Card>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* 오른쪽: 카카오 지도 */}
-          <div className={`${isLeftPanelOpen ? 'lg:col-span-7' : 'lg:col-span-1'}`}>
+          <div className={`transition-all duration-300 ease-in-out ${
+            isLeftPanelOpen ? 'flex-1' : 'w-full'
+          }`}>
             <Card className="h-full">
               <CardHeader>
                 <CardTitle className="flex items-center justify-between text-gray-900">

@@ -118,21 +118,35 @@ export function KakaoMap({
   if (error) {
     return (
       <div 
-        className={`flex items-center justify-center bg-gray-100 border border-gray-300 rounded-lg ${className}`}
+        className={`flex items-center justify-center bg-red-50 border border-red-300 rounded-lg ${className}`}
         style={{ width, height }}
       >
-        <div className="text-center text-gray-500">
-          <p className="text-sm">{error}</p>
-          <p className="text-xs mt-1">
-            .env.local 파일에 NEXT_PUBLIC_KAKAO_MAP_API_KEY를 설정해주세요
+        <div className="text-center text-red-600 p-4">
+          <div className="w-12 h-12 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
+            ❌
+          </div>
+          <p className="text-sm font-medium">{error}</p>
+          <p className="text-xs mt-2 text-red-500">
+            지도 서비스에 일시적인 문제가 있습니다.
           </p>
+          <button 
+            onClick={() => {
+              setError('')
+              setIsLoaded(false)
+              // 페이지 새로고침으로 재시도
+              window.location.reload()
+            }}
+            className="mt-3 px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600"
+          >
+            다시 시도
+          </button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className={className}>
+    <div className={`relative ${className}`}>
       <div 
         ref={mapRef} 
         style={{ width, height }}
@@ -140,12 +154,13 @@ export function KakaoMap({
       />
       {!isLoaded && (
         <div 
-          className="flex items-center justify-center bg-gray-100 border border-gray-300 rounded-lg absolute inset-0"
+          className="flex items-center justify-center bg-blue-50 border border-blue-300 rounded-lg absolute inset-0"
           style={{ width, height }}
         >
-          <div className="text-center text-gray-500">
+          <div className="text-center text-blue-600">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-            <p className="text-sm">지도를 불러오는 중...</p>
+            <p className="text-sm font-medium">카카오 지도 로딩 중...</p>
+            <p className="text-xs mt-1 text-blue-500">{center.lat.toFixed(4)}, {center.lng.toFixed(4)}</p>
           </div>
         </div>
       )}
