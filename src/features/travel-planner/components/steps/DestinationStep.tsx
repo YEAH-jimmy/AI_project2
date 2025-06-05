@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { MapPin, ArrowRight, ArrowLeft, Search } from 'lucide-react'
-import { PlaceSearch } from '../PlaceSearch'
 
 const destinationSchema = z.object({
   destination: z.string().min(1, '여행지를 선택해주세요'),
@@ -28,15 +27,15 @@ const popularDestinations = [
   { name: '전주', description: '한옥마을과 맛있는 음식' },
   { name: '속초', description: '설악산과 바다의 만남' },
   { name: '가평', description: '수도권 근교의 자연휴양' },
+  { name: '서울', description: '다양한 문화와 먹거리' },
+  { name: '인천', description: '차이나타운과 송도' },
+  { name: '대전', description: '과학의 도시' },
+  { name: '대구', description: '패션과 문화의 도시' },
 ]
 
 export function DestinationStep() {
   const { planData, updatePlanData, setCurrentStep } = useTravelPlannerStore()
   const [selectedDestination, setSelectedDestination] = useState(planData.destination || '')
-  const [destinationCoordinates, setDestinationCoordinates] = useState<{
-    lat: number
-    lng: number
-  } | null>(null)
   
   const {
     register,
@@ -56,11 +55,7 @@ export function DestinationStep() {
 
   const onSubmit = (data: DestinationFormData) => {
     updatePlanData({
-      destination: data.destination,
-      // 좌표 정보도 함께 저장 (향후 지도 표시용)
-      ...(destinationCoordinates && {
-        destinationCoordinates
-      })
+      destination: data.destination
     })
     setCurrentStep(3)
   }
@@ -68,17 +63,6 @@ export function DestinationStep() {
   const handleDestinationSelect = (destination: string) => {
     setSelectedDestination(destination)
     setValue('destination', destination, { shouldValidate: true })
-  }
-
-  const handlePlaceSelect = (place: {
-    name: string
-    address: string
-    lat: number
-    lng: number
-  }) => {
-    setValue('destination', place.name, { shouldValidate: true })
-    setSelectedDestination(place.name)
-    setDestinationCoordinates({ lat: place.lat, lng: place.lng })
   }
 
   const handlePrevious = () => {
@@ -108,34 +92,26 @@ export function DestinationStep() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            {/* 직접 입력 */}
             <div className="space-y-2">
-              <Label htmlFor="destination">여행지 검색</Label>
-              <PlaceSearch
-                placeholder="예: 제주도, 부산, 경주..."
-                defaultValue={destinationValue}
-                onPlaceSelect={handlePlaceSelect}
-                className="w-full"
-              />
+              <Label htmlFor="destination">여행지 입력</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  id="destination"
+                  placeholder="예: 제주도, 부산, 경주, 서울..."
+                  {...register('destination')}
+                  className={`pl-9 ${errors.destination ? 'border-red-500' : ''}`}
+                />
+              </div>
               {errors.destination && (
                 <p className="text-sm text-red-500">{errors.destination.message}</p>
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="destination-manual">또는 직접 입력</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  id="destination-manual"
-                  placeholder="예: 제주도, 부산, 경주..."
-                  {...register('destination')}
-                  className={`pl-9 ${errors.destination ? 'border-red-500' : ''}`}
-                />
-              </div>
-            </div>
-
+            {/* 인기 여행지 선택 */}
             <div className="space-y-3">
-              <Label>인기 여행지</Label>
+              <Label>인기 여행지 빠른 선택</Label>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {popularDestinations.map((dest) => (
                   <button
@@ -159,15 +135,14 @@ export function DestinationStep() {
               </div>
             </div>
 
+            {/* 선택된 여행지 표시 */}
             {destinationValue && (
-              <div className="text-center p-4 bg-green-50 rounded-lg">
-                <p className="text-sm text-green-600">
-                  선택한 여행지: <span className="font-semibold">{destinationValue}</span>
-                  {destinationCoordinates && (
-                    <span className="text-xs block mt-1">
-                      📍 위치 정보가 확인되었습니다
-                    </span>
-                  )}
+              <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
+                <p className="text-sm text-green-700">
+                  <span className="font-semibold">선택한 여행지: {destinationValue}</span>
+                </p>
+                <p className="text-xs text-green-600 mt-1">
+                  AI가 {destinationValue}의 최적 여행 코스를 추천해드릴게요!
                 </p>
               </div>
             )}

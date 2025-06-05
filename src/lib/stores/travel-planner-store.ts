@@ -11,13 +11,16 @@ export interface TravelPlanData {
     lat?: number
     lng?: number
   }
-  intercityTransport?: 'ktx' | 'bus' | 'car' | 'airplane' | 'other'
+  accommodationName?: string
+  hasBookedAccommodation?: boolean
   localTransport?: 'public' | 'walk' | 'bicycle' | 'rental-car' | 'other'
   travelers?: number
   ageGroups?: string[]
+  ageGroupCounts?: { [key: string]: number }
   interests?: string[]
   mustVisitPlaces?: string[]
   budget?: number
+  totalBudget?: number
   budgetCurrency?: 'KRW' | 'USD'
   additionalRequests?: string
 }
@@ -133,7 +136,6 @@ export const useTravelPlannerStore = create<TravelPlannerState>()(
       }),
       {
         name: 'travel-planner-storage',
-        skipHydration: true,
         // 저장 시 Date 객체 처리
         serialize: (state) => {
           return JSON.stringify(state);

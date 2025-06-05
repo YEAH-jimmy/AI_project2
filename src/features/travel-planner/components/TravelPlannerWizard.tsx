@@ -8,7 +8,6 @@ import { TransportStep } from './steps/TransportStep'
 import { TravelersStep } from './steps/TravelersStep'
 import { InterestsStep } from './steps/InterestsStep'
 import { MustVisitStep } from './steps/MustVisitStep'
-import { BudgetStep } from './steps/BudgetStep'
 import { ResultStep } from './steps/ResultStep'
 import { Button } from '@/components/ui/button'
 import { RefreshCw } from 'lucide-react'
@@ -77,7 +76,6 @@ export function TravelPlannerWizard() {
       case 7:
         return <MustVisitStep />
       case 8:
-        return <BudgetStep />
       case 9:
         return <ResultStep />
       default:
@@ -89,7 +87,7 @@ export function TravelPlannerWizard() {
     <div>
       {renderStepComponent()}
       
-      {isHydrated && displayStep > 1 && displayStep < 9 && (
+      {isHydrated && displayStep > 1 && displayStep < 8 && (
         <div className="mt-8 text-center">
           <Button 
             variant="link" 

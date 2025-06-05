@@ -168,7 +168,7 @@ export function ResultStep() {
   }, [setIsGenerating, planData.destination, planData.interests, planData.startDate, planData.endDate])
 
   const handlePrevious = () => {
-    setCurrentStep(8)
+    setCurrentStep(7) // 필수 방문 장소 단계로 돌아가기
   }
 
   const handleStartOver = () => {
@@ -312,7 +312,7 @@ export function ResultStep() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-none">
       {/* 에러 알림 */}
       {placeSearchError && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
@@ -329,8 +329,8 @@ export function ResultStep() {
         </div>
       )}
       
-      {/* 여행 정보 요약 */}
-      <Card className="max-w-4xl mx-auto">
+      {/* 여행 정보 요약 - 전체 너비 활용 */}
+      <Card className="w-full">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-gray-900">
             <Calendar className="w-5 h-5" />
@@ -354,13 +354,40 @@ export function ResultStep() {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-700">인원:</span>
-                <span className="font-medium text-gray-900">{planData.travelers}명</span>
+                <span className="font-medium text-gray-900">
+                  {planData.travelers}명
+                  {planData.ageGroupCounts && Object.keys(planData.ageGroupCounts).length > 0 && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      {Object.entries(planData.ageGroupCounts)
+                        .filter(([_, count]) => count > 0)
+                        .map(([ageGroup, count]) => {
+                          const ageLabels: { [key: string]: string } = {
+                            '10s': '10대', '20s': '20대', '30s': '30대', 
+                            '40s': '40대', '50s': '50대', '60+': '60대+'
+                          };
+                          return `${ageLabels[ageGroup] || ageGroup}: ${count}명`;
+                        })
+                        .join(', ')}
+                    </div>
+                  )}
+                </span>
               </div>
             </div>
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="text-gray-700">교통수단:</span>
-                <span className="font-medium text-gray-900">{planData.intercityTransport}</span>
+                <span className="font-medium text-gray-900">
+                  {(() => {
+                    const transportLabels: { [key: string]: string } = {
+                      'public': '대중교통',
+                      'walk': '도보',
+                      'bicycle': '자전거', 
+                      'rental-car': '렌트카',
+                      'other': '기타'
+                    };
+                    return transportLabels[planData.localTransport || 'public'] || '대중교통';
+                  })()}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-700">숙소 형태:</span>
@@ -369,9 +396,18 @@ export function ResultStep() {
               <div className="flex justify-between">
                 <span className="text-gray-700">예산:</span>
                 <span className="font-medium text-gray-900">
-                  {planData.budget ? 
-                    `${planData.budget.toLocaleString()}${planData.budgetCurrency === 'KRW' ? '원' : '$'}` 
-                    : '제한 없음'
+                  {planData.budget 
+                    ? (
+                      <>
+                        1인 {planData.budget.toLocaleString()}{planData.budgetCurrency === 'USD' ? '$' : '원'}
+                        {planData.travelers && planData.travelers > 1 && planData.totalBudget && (
+                          <div className="text-xs text-green-600 font-semibold">
+                            총 {planData.totalBudget.toLocaleString()}{planData.budgetCurrency === 'USD' ? '$' : '원'} ({planData.travelers}명)
+                          </div>
+                        )}
+                      </>
+                    )
+                    : '설정 안함'
                   }
                 </span>
               </div>
@@ -381,7 +417,7 @@ export function ResultStep() {
       </Card>
 
       {/* 일정과 지도 좌우 배치 - 전체 화면 너비 활용 */}
-      <div className="relative min-h-[800px]">
+      <div className="relative min-h-[800px] w-full">
         {/* 토글 버튼 */}
         <Button
           variant="outline"
@@ -402,10 +438,10 @@ export function ResultStep() {
           )}
         </Button>
 
-        <div className="flex gap-6 h-[800px]">
+        <div className="flex gap-4 h-[800px] w-full">
           {/* 왼쪽: AI 추천 일정 */}
           <div className={`transition-all duration-300 ease-in-out ${
-            isLeftPanelOpen ? 'w-2/5 opacity-100' : 'w-0 opacity-0 overflow-hidden'
+            isLeftPanelOpen ? 'w-1/2 opacity-100' : 'w-0 opacity-0 overflow-hidden'
           }`}>
             {isLeftPanelOpen && (
               <Card className="h-full">
@@ -700,8 +736,8 @@ export function ResultStep() {
         </div>
       </div>
 
-      {/* 액션 버튼들 */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto">
+      {/* 액션 버튼들 - 전체 너비 활용 */}
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
         <Button 
           onClick={handleDownloadCalendar}
           className="flex items-center gap-2"
