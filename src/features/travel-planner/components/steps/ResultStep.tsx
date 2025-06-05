@@ -22,7 +22,7 @@ import {
   Star
 } from 'lucide-react'
 import { KakaoMap } from '../KakaoMap'
-import { getPopularPlacesByRegion, RecommendedPlace } from '@/lib/place-recommendation'
+import { getPopularPlacesByRegion, RecommendedPlace, generateOptimizedItinerary } from '@/lib/place-recommendation'
 
 // 샘플 여행지 데이터 (실제로는 AI가 생성)
 const sampleDestinations = [
@@ -109,6 +109,7 @@ export function ResultStep() {
   const [showMap, setShowMap] = useState(true) // 기본적으로 지도 표시
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true) // 왼쪽 패널 상태
   const [recommendedPlaces, setRecommendedPlaces] = useState<RecommendedPlace[]>([])
+  const [optimizedItinerary, setOptimizedItinerary] = useState<{ [day: number]: RecommendedPlace[] }>({})
   const [loadingPlaces, setLoadingPlaces] = useState(false)
   const [placeSearchError, setPlaceSearchError] = useState<string | null>(null)
 
@@ -122,20 +123,35 @@ export function ResultStep() {
         setLoadingPlaces(true)
         try {
           console.log('장소 추천 시작:', planData.destination, planData.interests)
-          const places = await getPopularPlacesByRegion(
+          
+          // 여행 일수 계산
+          const days = planData.startDate && planData.endDate 
+            ? Math.ceil((new Date(planData.endDate).getTime() - new Date(planData.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1
+            : 1;
+          
+          // 최적화된 일정 생성
+          const itinerary = await generateOptimizedItinerary(
             planData.destination,
             planData.interests,
-            20 // 더 많은 장소 가져오기
-          )
-          setRecommendedPlaces(places)
-          console.log('추천 장소 성공:', places.length, '개')
-          setPlaceSearchError(null)
+            days,
+            getMapCenter() // 시작 위치로 지도 중심점 사용
+          );
+          
+          setOptimizedItinerary(itinerary);
+          
+          // 모든 추천 장소들을 평면화해서 저장 (지도 표시용)
+          const allPlaces = Object.values(itinerary).flat();
+          setRecommendedPlaces(allPlaces);
+          
+          console.log('최적화된 일정 생성 완료:', days, '일간', allPlaces.length, '개 장소');
+          setPlaceSearchError(null);
         } catch (error) {
           console.error('장소 추천 오류:', error)
           const errorMessage = error instanceof Error ? error.message : '장소 검색에 실패했습니다.'
           setPlaceSearchError(errorMessage)
           // 에러가 발생해도 빈 배열로 진행 (기본 일정 표시)
           setRecommendedPlaces([])
+          setOptimizedItinerary({})
         }
         setLoadingPlaces(false)
       }
@@ -149,7 +165,7 @@ export function ResultStep() {
     }, 3000)
 
     return () => clearTimeout(timer)
-  }, [setIsGenerating, planData.destination, planData.interests])
+  }, [setIsGenerating, planData.destination, planData.interests, planData.startDate, planData.endDate])
 
   const handlePrevious = () => {
     setCurrentStep(8)
@@ -186,14 +202,43 @@ export function ResultStep() {
   }
 
   const getDestinationMarkers = () => {
-    // 추천된 장소들이 있으면 사용
+    // 최적화된 일정이 있으면 날짜별로 순서가 있는 마커 생성
+    if (Object.keys(optimizedItinerary).length > 0) {
+      const markers: Array<{
+        lat: number;
+        lng: number;
+        name: string;
+        description: string;
+        order?: number;
+        day?: number;
+      }> = [];
+      
+      // 각 날짜별로 순서대로 마커 추가
+      Object.entries(optimizedItinerary).forEach(([dayStr, places]) => {
+        const day = parseInt(dayStr);
+        places.forEach((place, index) => {
+          markers.push({
+            lat: place.lat,
+            lng: place.lng,
+            name: `${day + 1}일차 ${index + 1}번: ${place.name}`,
+            description: `⭐ ${place.rating || 'N/A'} (${place.reviewCount || 0}명) | ${place.category}`,
+            order: index + 1,
+            day: day + 1
+          });
+        });
+      });
+      
+      return markers;
+    }
+    
+    // 기본 추천 장소들이 있으면 사용 (순서 없음)
     if (recommendedPlaces.length > 0) {
-      return recommendedPlaces.slice(0, 10).map(place => ({
+      return recommendedPlaces.slice(0, 10).map((place, index) => ({
         lat: place.lat,
         lng: place.lng,
         name: place.name,
-        description: `${place.category} ${place.matchScore ? `(매칭도: ${place.matchScore}점)` : ''}`
-      }))
+        description: `⭐ ${place.rating || 'N/A'} (${place.reviewCount || 0}명) | ${place.category}`
+      }));
     }
     
     // 실제로는 AI가 생성한 일정에서 마커를 만들어야 함
@@ -384,7 +429,25 @@ export function ResultStep() {
                             
                             // 여행지별 구체적인 일정 데이터
                             const getSpecificItinerary = (destination: string, day: number) => {
-                              // 실제 추천된 장소가 있으면 우선 활용
+                              // 최적화된 일정이 있으면 우선 사용
+                              if (optimizedItinerary[day] && optimizedItinerary[day].length > 0) {
+                                const dayPlaces = optimizedItinerary[day];
+                                
+                                return dayPlaces.map((place, index) => ({
+                                  time: generateTimeSlot(index),
+                                  activity: place.name,
+                                  location: place.roadAddress || place.address,
+                                  type: categorizePlace(place.category),
+                                  description: place.category,
+                                  rating: place.rating,
+                                  reviewCount: place.reviewCount,
+                                  matchScore: place.matchScore,
+                                  phone: place.phone,
+                                  isOptimized: true // 최적화된 일정임을 표시
+                                }));
+                              }
+                              
+                              // 실제 추천된 장소가 있으면 우선 활용 (기존 로직)
                               if (recommendedPlaces.length > 0) {
                                 const dayPlaces = recommendedPlaces.slice(day * 8, (day + 1) * 8); // 하루에 8개 장소
                                 
