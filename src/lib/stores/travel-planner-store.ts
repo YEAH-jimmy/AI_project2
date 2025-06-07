@@ -14,6 +14,7 @@ export interface TravelPlanData {
   accommodationName?: string
   hasBookedAccommodation?: boolean
   localTransport?: 'public' | 'walk' | 'bicycle' | 'rental-car' | 'other'
+  intercityTransport?: 'airplane' | 'train' | 'bus' | 'car'
   travelers?: number
   ageGroups?: string[]
   ageGroupCounts?: { [key: string]: number }

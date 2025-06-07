@@ -12,8 +12,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Home, ArrowRight, ArrowLeft, MapPin, Sparkles, Lightbulb } from 'lucide-react'
 
 const accommodationSchema = z.object({
-  accommodationName: z.string().optional(),
-  accommodationAddress: z.string().optional(),
+  accommodationName: z.string().min(1, '숙소명을 입력해주세요'),
+  accommodationAddress: z.string().min(1, '숙소 주소를 입력해주세요'),
   accommodationType: z.enum(['hotel', 'airbnb', 'guesthouse', 'resort', 'other']),
 })
 
@@ -54,10 +54,15 @@ export function AccommodationStep() {
   const accommodationAddressValue = watch('accommodationAddress')
 
   const onSubmit = (data: AccommodationFormData) => {
+    // 숙소 예약한 경우 반드시 정보를 입력해야 함
+    if (hasBookedAccommodation && (!data.accommodationName || !data.accommodationAddress)) {
+      return; // 유효성 검증에서 걸림
+    }
+    
     updatePlanData({
       hasBookedAccommodation,
-      accommodationName: data.accommodationName,
-      accommodationLocation: data.accommodationAddress 
+      accommodationName: hasBookedAccommodation ? data.accommodationName : undefined,
+      accommodationLocation: hasBookedAccommodation && data.accommodationAddress 
         ? { address: data.accommodationAddress } 
         : undefined,
       accommodationType: data.accommodationType,
@@ -167,8 +172,12 @@ export function AccommodationStep() {
                         placeholder="예: 롯데호텔 제주, 해운대 그랜드 호텔..."
                         {...register('accommodationName')}
                         className="pl-9"
+                        required
                       />
                     </div>
+                    {errors.accommodationName && (
+                      <p className="text-sm text-red-600">{errors.accommodationName.message}</p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -180,8 +189,12 @@ export function AccommodationStep() {
                         placeholder="예: 서울특별시 중구 명동, 부산광역시 해운대구..."
                         {...register('accommodationAddress')}
                         className="pl-9"
+                        required
                       />
                     </div>
+                    {errors.accommodationAddress && (
+                      <p className="text-sm text-red-600">{errors.accommodationAddress.message}</p>
+                    )}
                     <p className="text-xs text-gray-500">
                       정확한 주소나 대략적인 지역명을 입력해주세요
                     </p>
@@ -291,6 +304,7 @@ export function AccommodationStep() {
               <Button 
                 type="submit"
                 className="flex items-center gap-2"
+                disabled={hasBookedAccommodation && (!accommodationNameValue || !accommodationAddressValue)}
               >
                 다음 단계
                 <ArrowRight className="w-4 h-4" />
