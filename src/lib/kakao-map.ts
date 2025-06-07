@@ -6,8 +6,8 @@ declare global {
 }
 
 // API 키 직접 설정 (용도별 구분)
-const KAKAO_API_KEY = '792bf600641432ebcbd645acbd5c823e'; // JavaScript 키 (지도 표시용)
-const KAKAO_REST_API_KEY = '39073343b9c1560949ca1bb5d7c2d20e'; // REST API 키 (장소 검색용)
+const KAKAO_API_KEY = 'b96ce35e1cd6d37f165e9b54ebc06ae8'; // JavaScript 키 (지도 표시용)
+const KAKAO_REST_API_KEY = '01975e2891eb9c4a068ef83a0aee1b69'; // REST API 키 (장소 검색용)
 
 interface KakaoPlace {
   id: string;
@@ -38,29 +38,88 @@ export const loadKakaoMapScript = (): Promise<void> => {
   return new Promise((resolve, reject) => {
     // 이미 로드되어 있으면 바로 resolve
     if (window.kakao && window.kakao.maps) {
+      console.log('카카오 지도 이미 로드됨');
       resolve();
       return;
     }
 
-    const script = document.createElement('script');
-    script.async = true;
-    // 하드코딩된 키를 우선 사용
-    const apiKey = KAKAO_API_KEY;
-    script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${apiKey}&autoload=false`;
-    
-    script.onload = () => {
-      window.kakao.maps.load(() => {
-        console.log('카카오 지도 로드 완료');
-        resolve();
-      });
-    };
-    
-    script.onerror = () => {
-      console.error('카카오 지도 스크립트 로드 실패');
-      reject(new Error('카카오 지도 스크립트 로드에 실패했습니다.'));
-    };
+    // 이미 스크립트 태그가 존재하는지 확인
+    const existingScript = document.querySelector('script[src*="dapi.kakao.com"]');
+    if (existingScript) {
+      console.log('카카오 지도 스크립트 태그가 이미 존재함');
+      
+      // 스크립트가 로드되었지만 아직 초기화되지 않은 경우
+      if (window.kakao && !window.kakao.maps) {
+        try {
+          // maps 객체가 로드될 때까지 대기
+          const checkKakaoMaps = setInterval(() => {
+            if (window.kakao.maps) {
+              clearInterval(checkKakaoMaps);
+              resolve();
+            }
+          }, 100);
+          
+          // 30초 타임아웃 설정
+          setTimeout(() => {
+            clearInterval(checkKakaoMaps);
+            reject(new Error('카카오 지도 초기화 타임아웃'));
+          }, 30000);
+        } catch (e) {
+          reject(e);
+        }
+      } else {
+        // 존재하지만 초기화가 완료되지 않은 스크립트 제거 후 다시 로드
+        existingScript.remove();
+        loadNewScript();
+      }
+      return;
+    }
 
-    document.head.appendChild(script);
+    loadNewScript();
+
+    function loadNewScript() {
+      const script = document.createElement('script');
+      script.async = true;
+      script.defer = true;
+      // 하드코딩된 키를 우선 사용
+      const apiKey = KAKAO_API_KEY;
+      // autoload=false로 설정하여 document.write 오류 방지
+      script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${apiKey}&autoload=false`;
+      
+      script.onload = () => {
+        console.log('카카오 지도 스크립트 로드 완료, 초기화 시작');
+        // autoload=false이므로 수동으로 초기화
+        if (window.kakao && window.kakao.maps) {
+          window.kakao.maps.load(() => {
+            console.log('카카오 지도 초기화 완료');
+            resolve();
+          });
+        } else {
+          const waitForKakao = setInterval(() => {
+            if (window.kakao) {
+              clearInterval(waitForKakao);
+              window.kakao.maps.load(() => {
+                console.log('카카오 지도 초기화 완료 (지연)');
+                resolve();
+              });
+            }
+          }, 100);
+          
+          // 30초 타임아웃 설정
+          setTimeout(() => {
+            clearInterval(waitForKakao);
+            reject(new Error('카카오 지도 객체 로드 타임아웃'));
+          }, 30000);
+        }
+      };
+      
+      script.onerror = (e) => {
+        console.error('카카오 지도 스크립트 로드 실패', e);
+        reject(new Error('카카오 지도 스크립트 로드에 실패했습니다.'));
+      };
+
+      document.head.appendChild(script);
+    }
   });
 };
 
@@ -361,3 +420,256 @@ export const optimizeRoute = (
 };
 
 export type { KakaoPlace, KakaoSearchResponse }; 
+
+// 이동시간 계산 타입 정의
+export interface TravelTimeInfo {
+  distanceKm: number;
+  durationMinutes: number;
+  transportType: 'walking' | 'driving' | 'transit';
+  estimatedCost?: number;
+}
+
+// 교통수단별 이동시간 계산
+export const calculateTravelTime = (
+  fromLat: number,
+  fromLng: number,
+  toLat: number,
+  toLng: number,
+  transportType: 'walking' | 'driving' | 'transit' = 'driving'
+): TravelTimeInfo => {
+  const distanceKm = calculateDistance(fromLat, fromLng, toLat, toLng);
+  
+  let durationMinutes: number;
+  let estimatedCost: number | undefined;
+  
+  switch (transportType) {
+    case 'walking':
+      // 도보: 평균 시속 4km/h
+      durationMinutes = Math.ceil((distanceKm / 4) * 60);
+      estimatedCost = 0;
+      break;
+    case 'driving':
+      // 자동차: 시내 평균 시속 30km/h, 고속도로 80km/h
+      const averageSpeed = distanceKm > 20 ? 60 : 25; // 장거리는 고속도로 고려
+      durationMinutes = Math.ceil((distanceKm / averageSpeed) * 60);
+      // 주차비 + 기름값 대략적 계산 (km당 500원)
+      estimatedCost = Math.ceil(distanceKm * 500);
+      break;
+    case 'transit':
+      // 대중교통: 평균 시속 25km/h (대기시간 포함)
+      durationMinutes = Math.ceil((distanceKm / 25) * 60);
+      // 대중교통비 계산 (기본요금 + 거리요금)
+      if (distanceKm <= 10) {
+        estimatedCost = 1500; // 버스/지하철 기본요금
+      } else if (distanceKm <= 40) {
+        estimatedCost = 2000; // 중거리
+      } else {
+        estimatedCost = 3000; // 장거리
+      }
+      break;
+  }
+  
+  return {
+    distanceKm: Math.round(distanceKm * 10) / 10, // 소수점 첫째자리까지
+    durationMinutes,
+    transportType,
+    estimatedCost
+  };
+};
+
+// 여러 장소 간의 이동시간 행렬 계산
+export const calculateTravelTimeMatrix = (
+  places: Array<{ name: string; lat: number; lng: number }>,
+  transportType: 'walking' | 'driving' | 'transit' = 'driving'
+): Array<Array<TravelTimeInfo | null>> => {
+  const matrix: Array<Array<TravelTimeInfo | null>> = [];
+  
+  for (let i = 0; i < places.length; i++) {
+    matrix[i] = [];
+    for (let j = 0; j < places.length; j++) {
+      if (i === j) {
+        matrix[i][j] = null; // 같은 장소
+      } else {
+        matrix[i][j] = calculateTravelTime(
+          places[i].lat,
+          places[i].lng,
+          places[j].lat,
+          places[j].lng,
+          transportType
+        );
+      }
+    }
+  }
+  
+  return matrix;
+};
+
+// 순차적 이동시간 계산 (일정 순서대로)
+export const calculateSequentialTravelTimes = (
+  places: Array<{ name: string; lat: number; lng: number }>,
+  transportType: 'walking' | 'driving' | 'transit' = 'driving'
+): Array<TravelTimeInfo> => {
+  const travelTimes: Array<TravelTimeInfo> = [];
+  
+  for (let i = 0; i < places.length - 1; i++) {
+    const travelTime = calculateTravelTime(
+      places[i].lat,
+      places[i].lng,
+      places[i + 1].lat,
+      places[i + 1].lng,
+      transportType
+    );
+    travelTimes.push(travelTime);
+  }
+  
+  return travelTimes;
+};
+
+// 카카오맵 길찾기 API 호출 (더 정확한 이동시간)
+export const getDetailedTravelTime = async (
+  fromLat: number,
+  fromLng: number,
+  toLat: number,
+  toLng: number,
+  transportType: 'car' | 'walk' | 'transit' = 'car'
+): Promise<TravelTimeInfo | null> => {
+  try {
+    const apiKey = process.env.NEXT_PUBLIC_KAKAO_REST_API_KEY || KAKAO_REST_API_KEY;
+    
+    if (!apiKey) {
+      console.warn('카카오 REST API 키가 없어 예상 이동시간을 사용합니다.');
+      return calculateTravelTime(fromLat, fromLng, toLat, toLng, 
+        transportType === 'car' ? 'driving' : transportType === 'walk' ? 'walking' : 'transit'
+      );
+    }
+
+    let url: string;
+    
+    if (transportType === 'car') {
+      // 자동차 길찾기 API
+      url = `https://dapi.kakao.com/v2/local/geo/coord2regioncode.json?x=${fromLng}&y=${fromLat}`;
+      // 실제로는 Direction API를 사용해야 하지만, 현재는 예상값 반환
+      return calculateTravelTime(fromLat, fromLng, toLat, toLng, 'driving');
+    } else if (transportType === 'walk') {
+      // 도보 길찾기는 직선거리 기반 계산
+      return calculateTravelTime(fromLat, fromLng, toLat, toLng, 'walking');
+    } else {
+      // 대중교통은 예상값 사용 (복잡한 API 호출 필요)
+      return calculateTravelTime(fromLat, fromLng, toLat, toLng, 'transit');
+    }
+  } catch (error) {
+    console.error('상세 이동시간 계산 오류:', error);
+    // API 실패시 예상값 반환
+    return calculateTravelTime(fromLat, fromLng, toLat, toLng, 
+      transportType === 'car' ? 'driving' : transportType === 'walk' ? 'walking' : 'transit'
+    );
+  }
+};
+
+// 이동시간을 고려한 최적 경로 계산
+export const optimizeRouteWithTravelTime = (
+  startLocation: { lat: number; lng: number },
+  destinations: Array<{ name: string; lat: number; lng: number }>,
+  transportType: 'walking' | 'driving' | 'transit' = 'driving',
+  endLocation?: { lat: number; lng: number }
+): {
+  optimizedRoute: Array<{ name: string; lat: number; lng: number }>;
+  totalTravelTime: number;
+  totalDistance: number;
+  travelSegments: Array<TravelTimeInfo>;
+} => {
+  if (destinations.length === 0) {
+    return {
+      optimizedRoute: [],
+      totalTravelTime: 0,
+      totalDistance: 0,
+      travelSegments: []
+    };
+  }
+  
+  const optimizedRoute: Array<{ name: string; lat: number; lng: number }> = [];
+  const travelSegments: Array<TravelTimeInfo> = [];
+  const remaining = [...destinations];
+  let currentLocation = startLocation;
+  let totalTravelTime = 0;
+  let totalDistance = 0;
+  
+  // 가장 가까운 다음 장소를 찾는 그리디 알고리즘 (시간 기준)
+  while (remaining.length > 0) {
+    let nearestIndex = 0;
+    let shortestTime = calculateTravelTime(
+      currentLocation.lat,
+      currentLocation.lng,
+      remaining[0].lat,
+      remaining[0].lng,
+      transportType
+    ).durationMinutes;
+    
+    for (let i = 1; i < remaining.length; i++) {
+      const travelTime = calculateTravelTime(
+        currentLocation.lat,
+        currentLocation.lng,
+        remaining[i].lat,
+        remaining[i].lng,
+        transportType
+      );
+      
+      if (travelTime.durationMinutes < shortestTime) {
+        shortestTime = travelTime.durationMinutes;
+        nearestIndex = i;
+      }
+    }
+    
+    const nearest = remaining.splice(nearestIndex, 1)[0];
+    const travelInfo = calculateTravelTime(
+      currentLocation.lat,
+      currentLocation.lng,
+      nearest.lat,
+      nearest.lng,
+      transportType
+    );
+    
+    optimizedRoute.push(nearest);
+    travelSegments.push(travelInfo);
+    totalTravelTime += travelInfo.durationMinutes;
+    totalDistance += travelInfo.distanceKm;
+    currentLocation = nearest;
+  }
+  
+  // 끝 위치가 지정된 경우 마지막 이동시간 추가
+  if (endLocation) {
+    const finalTravel = calculateTravelTime(
+      currentLocation.lat,
+      currentLocation.lng,
+      endLocation.lat,
+      endLocation.lng,
+      transportType
+    );
+    travelSegments.push(finalTravel);
+    totalTravelTime += finalTravel.durationMinutes;
+    totalDistance += finalTravel.distanceKm;
+  }
+  
+  return {
+    optimizedRoute,
+    totalTravelTime,
+    totalDistance,
+    travelSegments
+  };
+};
+
+// 이동시간 표시용 포맷팅 함수
+export const formatTravelTime = (minutes: number): string => {
+  if (minutes < 60) {
+    return `${minutes}분`;
+  } else {
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return remainingMinutes > 0 ? `${hours}시간 ${remainingMinutes}분` : `${hours}시간`;
+  }
+};
+
+// 이동비용 포맷팅 함수
+export const formatTravelCost = (cost: number): string => {
+  return `${cost.toLocaleString()}원`;
+}; 

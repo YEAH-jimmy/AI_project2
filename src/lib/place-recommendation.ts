@@ -1,5 +1,5 @@
 // 장소 추천 시스템 - 네이버 + 카카오 API 조합
-import { searchPlaces, KakaoPlace } from './kakao-map'
+import { searchPlaces, KakaoPlace, calculateTravelTime, calculateSequentialTravelTimes, optimizeRouteWithTravelTime, TravelTimeInfo, formatTravelTime, formatTravelCost } from './kakao-map'
 
 // 네이버 플레이스 API 타입 정의
 interface NaverPlace {
@@ -39,6 +39,9 @@ export interface RecommendedPlace {
   distance?: number
   matchScore?: number // 사용자 선호도 매칭 점수
   source: 'kakao' | 'naver' | 'combined'
+  // 이동시간 관련 정보 추가
+  travelTimeFromPrevious?: TravelTimeInfo
+  suggestedVisitDuration?: number // 권장 방문 시간 (분)
 }
 
 // 사용자 선호도 기반 카테고리 매핑
@@ -297,10 +300,11 @@ export const generateOptimizedItinerary = async (
   destination: string,
   preferences: string[],
   days: number,
-  startLocation?: { lat: number; lng: number }
+  startLocation?: { lat: number; lng: number },
+  transportType: 'walking' | 'driving' | 'transit' = 'driving'
 ): Promise<{ [day: number]: RecommendedPlace[] }> => {
   try {
-    console.log('최적화된 일정 생성 시작:', { destination, preferences, days });
+    console.log('최적화된 일정 생성 시작:', { destination, preferences, days, transportType });
     
     // 1. 모든 추천 장소 수집 (더 많이 가져오기)
     const allPlaces = await getPopularPlacesByRegion(destination, preferences, days * 12);
@@ -325,8 +329,13 @@ export const generateOptimizedItinerary = async (
         day
       );
       
-      // 4. 경로 최적화 적용
-      const optimizedDayPlaces = optimizeDayRoute(dayPlaces, startLocation);
+      // 4. 이동시간을 고려한 경로 최적화 적용
+      const optimizedDayPlaces = optimizeDayRouteWithTravelTime(
+        dayPlaces, 
+        startLocation,
+        transportType
+      );
+      
       itinerary[day] = optimizedDayPlaces;
       
       // 사용된 장소들을 기록하여 중복 방지
@@ -439,48 +448,143 @@ const generateDayItinerary = (
   return dayPlan.slice(0, 8);
 };
 
-// 하루 경로 최적화 (TSP 문제 간소화 버전)
-const optimizeDayRoute = (
+// 이동시간을 고려한 하루 경로 최적화
+const optimizeDayRouteWithTravelTime = (
   places: RecommendedPlace[], 
-  startLocation?: { lat: number; lng: number }
+  startLocation?: { lat: number; lng: number },
+  transportType: 'walking' | 'driving' | 'transit' = 'driving'
 ): RecommendedPlace[] => {
   if (places.length <= 1) return places;
   
   // 시작점 설정 (첫 번째 장소나 지정된 시작점)
-  let currentLocation = startLocation || { lat: places[0].lat, lng: places[0].lng };
-  const optimizedRoute: RecommendedPlace[] = [];
-  const remaining = [...places];
+  const routeStartLocation = startLocation || { lat: places[0].lat, lng: places[0].lng };
   
-  // 가장 가까운 다음 장소를 찾는 그리디 알고리즘
-  while (remaining.length > 0) {
-    let nearestIndex = 0;
-    let shortestDistance = calculateDistance(
-      currentLocation.lat,
-      currentLocation.lng,
-      remaining[0].lat,
-      remaining[0].lng
-    );
+  // 장소들을 좌표 정보로 변환
+  const destinationsForRoute = places.map(place => ({
+    name: place.name,
+    lat: place.lat,
+    lng: place.lng,
+    originalPlace: place
+  }));
+  
+  // 이동시간을 고려한 최적 경로 계산
+  const optimizationResult = optimizeRouteWithTravelTime(
+    routeStartLocation,
+    destinationsForRoute,
+    transportType
+  );
+  
+  // 최적화된 순서로 장소들을 재배열하고 이동시간 정보 추가
+  const optimizedPlaces: RecommendedPlace[] = optimizationResult.optimizedRoute.map((routePlace, index) => {
+    const originalPlace = destinationsForRoute.find(d => d.name === routePlace.name)?.originalPlace;
+    if (!originalPlace) return null;
     
-    // 모든 남은 장소 중 가장 가까운 곳 찾기
-    for (let i = 1; i < remaining.length; i++) {
-      const distance = calculateDistance(
-        currentLocation.lat,
-        currentLocation.lng,
-        remaining[i].lat,
-        remaining[i].lng
-      );
-      
-      if (distance < shortestDistance) {
-        shortestDistance = distance;
-        nearestIndex = i;
-      }
-    }
+    // 이동시간 정보 추가
+    const travelTimeFromPrevious = index < optimizationResult.travelSegments.length 
+      ? optimizationResult.travelSegments[index] 
+      : undefined;
     
-    // 가장 가까운 장소를 경로에 추가
-    const nearestPlace = remaining.splice(nearestIndex, 1)[0];
-    optimizedRoute.push(nearestPlace);
-    currentLocation = { lat: nearestPlace.lat, lng: nearestPlace.lng };
+    // 장소별 권장 방문 시간 설정
+    const suggestedVisitDuration = getSuggestedVisitDuration(originalPlace.category);
+    
+    return {
+      ...originalPlace,
+      travelTimeFromPrevious,
+      suggestedVisitDuration
+    };
+  }).filter(Boolean) as RecommendedPlace[];
+  
+  console.log(`경로 최적화 완료: 총 이동시간 ${formatTravelTime(optimizationResult.totalTravelTime)}, 총 거리 ${optimizationResult.totalDistance.toFixed(1)}km`);
+  
+  return optimizedPlaces;
+};
+
+// 장소 카테고리별 권장 방문 시간 (분)
+const getSuggestedVisitDuration = (category: string): number => {
+  if (category.includes('박물관') || category.includes('미술관')) {
+    return 90; // 1시간 30분
+  }
+  if (category.includes('관광') || category.includes('명소') || category.includes('공원')) {
+    return 60; // 1시간
+  }
+  if (category.includes('음식점') || category.includes('맛집')) {
+    return 90; // 1시간 30분 (식사 시간)
+  }
+  if (category.includes('카페') || category.includes('디저트')) {
+    return 45; // 45분
+  }
+  if (category.includes('쇼핑') || category.includes('시장') || category.includes('백화점')) {
+    return 120; // 2시간
+  }
+  if (category.includes('문화') || category.includes('전시')) {
+    return 75; // 1시간 15분
+  }
+  if (category.includes('체험') || category.includes('테마파크')) {
+    return 180; // 3시간
   }
   
-  return optimizedRoute;
+  return 60; // 기본값: 1시간
+};
+
+// 일정의 총 소요시간 계산
+export const calculateItineraryTotalTime = (
+  dayPlaces: RecommendedPlace[],
+  includeVisitTime: boolean = true
+): {
+  totalTravelTime: number;
+  totalVisitTime: number;
+  totalTime: number;
+  formattedTotalTime: string;
+} => {
+  let totalTravelTime = 0;
+  let totalVisitTime = 0;
+  
+  dayPlaces.forEach(place => {
+    // 이동시간 합산
+    if (place.travelTimeFromPrevious) {
+      totalTravelTime += place.travelTimeFromPrevious.durationMinutes;
+    }
+    
+    // 방문시간 합산
+    if (includeVisitTime && place.suggestedVisitDuration) {
+      totalVisitTime += place.suggestedVisitDuration;
+    }
+  });
+  
+  const totalTime = totalTravelTime + totalVisitTime;
+  
+  return {
+    totalTravelTime,
+    totalVisitTime,
+    totalTime,
+    formattedTotalTime: formatTravelTime(totalTime)
+  };
+};
+
+// 일정의 예상 비용 계산
+export const calculateItineraryCost = (
+  dayPlaces: RecommendedPlace[]
+): {
+  totalTravelCost: number;
+  formattedTotalCost: string;
+  costByTransport: { [key: string]: number };
+} => {
+  let totalTravelCost = 0;
+  const costByTransport: { [key: string]: number } = {};
+  
+  dayPlaces.forEach(place => {
+    if (place.travelTimeFromPrevious?.estimatedCost) {
+      const cost = place.travelTimeFromPrevious.estimatedCost;
+      const transport = place.travelTimeFromPrevious.transportType;
+      
+      totalTravelCost += cost;
+      costByTransport[transport] = (costByTransport[transport] || 0) + cost;
+    }
+  });
+  
+  return {
+    totalTravelCost,
+    formattedTotalCost: formatTravelCost(totalTravelCost),
+    costByTransport
+  };
 }; 

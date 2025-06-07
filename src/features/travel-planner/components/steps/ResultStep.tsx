@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { useTravelPlannerStore } from '@/lib/stores/travel-planner-store'
@@ -19,7 +19,8 @@ import {
   Map,
   PanelLeftClose,
   PanelLeftOpen,
-  Star
+  Star,
+  Navigation
 } from 'lucide-react'
 import { KakaoMap } from '../KakaoMap'
 import { getPopularPlacesByRegion, RecommendedPlace, generateOptimizedItinerary } from '@/lib/place-recommendation'
@@ -103,6 +104,25 @@ const categorizePlace = (category: string): string => {
   return 'attraction' // 기본값
 }
 
+type ResultTransportType = 'driving' | 'transit' | 'walking' | 'bicycle' | 'other';
+
+const mapPlanTransportToResultType = (planTransport: string | undefined): ResultTransportType => {
+  switch (planTransport) {
+    case 'public':
+      return 'transit';
+    case 'rental-car':
+      return 'driving';
+    case 'walk':
+      return 'walking';
+    case 'bicycle':
+      return 'bicycle';
+    case 'other':
+      return 'other';
+    default:
+      return 'driving';
+  }
+};
+
 export function ResultStep() {
   const { planData, setCurrentStep, resetPlanData, setIsGenerating, isGenerating } = useTravelPlannerStore()
   const [generationComplete, setGenerationComplete] = useState(false)
@@ -112,6 +132,101 @@ export function ResultStep() {
   const [optimizedItinerary, setOptimizedItinerary] = useState<{ [day: number]: RecommendedPlace[] }>({})
   const [loadingPlaces, setLoadingPlaces] = useState(false)
   const [placeSearchError, setPlaceSearchError] = useState<string | null>(null)
+  const [selectedTransportType, setSelectedTransportType] = useState<ResultTransportType>(() => mapPlanTransportToResultType(planData.localTransport))
+  const [isTransportMenuOpen, setIsTransportMenuOpen] = useState(false)
+
+  // 드롭다운 외부 클릭시 닫기
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('[data-transport-dropdown]')) {
+        setIsTransportMenuOpen(false);
+      }
+    };
+
+    if (isTransportMenuOpen) {
+      document.addEventListener('click', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [isTransportMenuOpen]);
+
+  const mapCenter = useMemo(() => {
+    const destinations: { [key: string]: { lat: number; lng: number } } = {
+      '제주도': { lat: 33.4996, lng: 126.5312 },
+      '부산': { lat: 35.1796, lng: 129.0756 },
+      '경주': { lat: 35.8562, lng: 129.2247 },
+      '강릉': { lat: 37.7519, lng: 128.8761 },
+      '여수': { lat: 34.7604, lng: 127.6622 },
+      '전주': { lat: 35.8242, lng: 127.1480 },
+      '속초': { lat: 38.2070, lng: 128.5918 },
+      '가평': { lat: 37.8314, lng: 127.5109 },
+    }
+    
+    return destinations[planData.destination || ''] || { lat: 37.5665, lng: 126.9780 }
+  }, [planData.destination]);
+
+  const mapMarkers = useMemo(() => {
+    // 최적화된 일정이 있으면 날짜별로 순서가 있는 마커 생성
+    if (Object.keys(optimizedItinerary).length > 0) {
+      const markers: Array<{
+        lat: number;
+        lng: number;
+        name: string;
+        description: string;
+        order?: number;
+        day?: number;
+      }> = [];
+      
+      // 각 날짜별로 순서대로 마커 추가
+      Object.entries(optimizedItinerary).forEach(([dayStr, places]) => {
+        const day = parseInt(dayStr);
+        places.forEach((place, index) => {
+          markers.push({
+            lat: place.lat,
+            lng: place.lng,
+            name: `${day + 1}일차 ${index + 1}번: ${place.name}`,
+            description: `⭐ ${place.rating || 'N/A'} (${place.reviewCount || 0}명) | ${place.category}`,
+            order: index + 1,
+            day: day + 1
+          });
+        });
+      });
+      
+      return markers;
+    }
+    
+    // 기본 추천 장소들이 있으면 사용 (순서 없음) - 중복 제거
+    if (recommendedPlaces.length > 0) {
+      // 중복 제거: 같은 이름의 장소는 한 번만 포함
+      const uniquePlaces = recommendedPlaces.filter((place, index, arr) => 
+        arr.findIndex(p => p.name === place.name) === index
+      );
+      
+      return uniquePlaces.slice(0, 10).map((place, index) => ({
+        lat: place.lat,
+        lng: place.lng,
+        name: place.name,
+        description: `⭐ ${place.rating || 'N/A'} (${place.reviewCount || 0}명) | ${place.category}`
+      }));
+    }
+    
+    // 실제로는 AI가 생성한 일정에서 마커를 만들어야 함
+    
+    if (planData.destination === '서울' || !planData.destination) {
+      return sampleDestinations
+    }
+
+    // 다른 도시의 경우 중심점만 표시
+    return [{
+      lat: mapCenter.lat,
+      lng: mapCenter.lng,
+      name: planData.destination || '여행지',
+      description: '선택하신 여행 목적지'
+    }]
+  }, [optimizedItinerary, recommendedPlaces, planData.destination, mapCenter]);
 
   useEffect(() => {
     // AI 일정 생성 시뮬레이션
@@ -134,7 +249,7 @@ export function ResultStep() {
             planData.destination,
             planData.interests,
             days,
-            getMapCenter() // 시작 위치로 지도 중심점 사용
+            mapCenter // 시작 위치로 지도 중심점 사용
           );
           
           setOptimizedItinerary(itinerary);
@@ -165,7 +280,7 @@ export function ResultStep() {
     }, 3000)
 
     return () => clearTimeout(timer)
-  }, [setIsGenerating, planData.destination, planData.interests, planData.startDate, planData.endDate])
+  }, [setIsGenerating, planData.destination, planData.interests, planData.startDate, planData.endDate, mapCenter])
 
   const handlePrevious = () => {
     setCurrentStep(7) // 필수 방문 장소 단계로 돌아가기
@@ -183,78 +298,6 @@ export function ResultStep() {
   const handleShare = () => {
     // TODO: 공유 기능 구현
     alert('공유 기능은 추후 구현 예정입니다.')
-  }
-
-  // 여행지에 따른 지도 중심점 설정
-  const getMapCenter = () => {
-    const destinations: { [key: string]: { lat: number; lng: number } } = {
-      '제주도': { lat: 33.4996, lng: 126.5312 },
-      '부산': { lat: 35.1796, lng: 129.0756 },
-      '경주': { lat: 35.8562, lng: 129.2247 },
-      '강릉': { lat: 37.7519, lng: 128.8761 },
-      '여수': { lat: 34.7604, lng: 127.6622 },
-      '전주': { lat: 35.8242, lng: 127.1480 },
-      '속초': { lat: 38.2070, lng: 128.5918 },
-      '가평': { lat: 37.8314, lng: 127.5109 },
-    }
-    
-    return destinations[planData.destination || ''] || { lat: 37.5665, lng: 126.9780 }
-  }
-
-  const getDestinationMarkers = () => {
-    // 최적화된 일정이 있으면 날짜별로 순서가 있는 마커 생성
-    if (Object.keys(optimizedItinerary).length > 0) {
-      const markers: Array<{
-        lat: number;
-        lng: number;
-        name: string;
-        description: string;
-        order?: number;
-        day?: number;
-      }> = [];
-      
-      // 각 날짜별로 순서대로 마커 추가
-      Object.entries(optimizedItinerary).forEach(([dayStr, places]) => {
-        const day = parseInt(dayStr);
-        places.forEach((place, index) => {
-          markers.push({
-            lat: place.lat,
-            lng: place.lng,
-            name: `${day + 1}일차 ${index + 1}번: ${place.name}`,
-            description: `⭐ ${place.rating || 'N/A'} (${place.reviewCount || 0}명) | ${place.category}`,
-            order: index + 1,
-            day: day + 1
-          });
-        });
-      });
-      
-      return markers;
-    }
-    
-    // 기본 추천 장소들이 있으면 사용 (순서 없음)
-    if (recommendedPlaces.length > 0) {
-      return recommendedPlaces.slice(0, 10).map((place, index) => ({
-        lat: place.lat,
-        lng: place.lng,
-        name: place.name,
-        description: `⭐ ${place.rating || 'N/A'} (${place.reviewCount || 0}명) | ${place.category}`
-      }));
-    }
-    
-    // 실제로는 AI가 생성한 일정에서 마커를 만들어야 함
-    const center = getMapCenter()
-    
-    if (planData.destination === '서울' || !planData.destination) {
-      return sampleDestinations
-    }
-
-    // 다른 도시의 경우 중심점만 표시
-    return [{
-      lat: center.lat,
-      lng: center.lng,
-      name: planData.destination || '여행지',
-      description: '선택하신 여행 목적지'
-    }]
   }
 
   if (isGenerating) {
@@ -393,24 +436,6 @@ export function ResultStep() {
                 <span className="text-gray-700">숙소 형태:</span>
                 <span className="font-medium text-gray-900">{planData.accommodationType}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-700">예산:</span>
-                <span className="font-medium text-gray-900">
-                  {planData.budget 
-                    ? (
-                      <>
-                        1인 {planData.budget.toLocaleString()}{planData.budgetCurrency === 'USD' ? '$' : '원'}
-                        {planData.travelers && planData.travelers > 1 && planData.totalBudget && (
-                          <div className="text-xs text-green-600 font-semibold">
-                            총 {planData.totalBudget.toLocaleString()}{planData.budgetCurrency === 'USD' ? '$' : '원'} ({planData.travelers}명)
-                          </div>
-                        )}
-                      </>
-                    )
-                    : '설정 안함'
-                  }
-                </span>
-              </div>
             </div>
           </div>
         </CardContent>
@@ -446,9 +471,62 @@ export function ResultStep() {
             {isLeftPanelOpen && (
               <Card className="h-full">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-gray-900">
-                    <MapPin className="w-5 h-5" />
-                    AI 추천 일정
+                  <CardTitle className="flex items-center justify-between text-gray-900">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-5 h-5" />
+                      AI 추천 일정
+                    </div>
+                    {/* 교통수단 선택 */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">교통수단:</span>
+                      <div className="relative" data-transport-dropdown>
+                        {/* 현재 선택된 교통수단 표시 버튼 */}
+                        <button
+                          onClick={() => setIsTransportMenuOpen(!isTransportMenuOpen)}
+                          className="px-3 py-1 text-sm rounded-md bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200 transition-colors flex items-center gap-2"
+                        >
+                          {(() => {
+                            const currentTransport = [
+                              { type: 'driving' as const, icon: '🚗', label: '자동차' },
+                              { type: 'transit' as const, icon: '🚌', label: '대중교통' },
+                              { type: 'walking' as const, icon: '🚶', label: '도보' },
+                              { type: 'bicycle' as const, icon: '🚴', label: '자전거' },
+                              { type: 'other' as const, icon: '🚕', label: '기타' }
+                            ].find(t => t.type === selectedTransportType);
+                            return currentTransport ? `${currentTransport.icon} ${currentTransport.label}` : '🚗 자동차';
+                          })()}
+                          <span className="text-xs">▼</span>
+                        </button>
+
+                        {/* 다른 교통수단 옵션들 (드롭다운) */}
+                        {isTransportMenuOpen && (
+                          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-20 min-w-[140px]">
+                            <div className="py-1">
+                              <div className="px-3 py-1 text-xs text-gray-500 border-b border-gray-100">다른 교통수단</div>
+                              {[
+                                { type: 'driving' as const, icon: '🚗', label: '자동차' },
+                                { type: 'transit' as const, icon: '🚌', label: '대중교통' },
+                                { type: 'walking' as const, icon: '🚶', label: '도보' },
+                                { type: 'bicycle' as const, icon: '🚴', label: '자전거' },
+                                { type: 'other' as const, icon: '🚕', label: '기타' }
+                              ].filter(t => t.type !== selectedTransportType).map(({ type, icon, label }) => (
+                                <button
+                                  key={type}
+                                  onClick={() => {
+                                    setSelectedTransportType(type);
+                                    setIsTransportMenuOpen(false);
+                                  }}
+                                  className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center gap-2"
+                                  title={`${label}로 경로 재계산`}
+                                >
+                                  {icon} {label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="h-[calc(100%-5rem)] overflow-y-auto">
@@ -469,7 +547,12 @@ export function ResultStep() {
                               if (optimizedItinerary[day] && optimizedItinerary[day].length > 0) {
                                 const dayPlaces = optimizedItinerary[day];
                                 
-                                return dayPlaces.map((place, index) => ({
+                                // 중복 제거: 같은 이름의 장소는 제외
+                                const uniquePlaces = dayPlaces.filter((place, index, arr) => 
+                                  arr.findIndex(p => p.name === place.name) === index
+                                );
+                                
+                                return uniquePlaces.map((place, index) => ({
                                   time: generateTimeSlot(index),
                                   activity: place.name,
                                   location: place.roadAddress || place.address,
@@ -485,7 +568,20 @@ export function ResultStep() {
                               
                               // 실제 추천된 장소가 있으면 우선 활용 (기존 로직)
                               if (recommendedPlaces.length > 0) {
-                                const dayPlaces = recommendedPlaces.slice(day * 8, (day + 1) * 8); // 하루에 8개 장소
+                                // 이미 사용된 장소들을 추적하기 위한 Set
+                                const usedPlaces = new Set<string>();
+                                
+                                // 모든 날짜의 사용된 장소들을 먼저 수집
+                                for (let d = 0; d < dayCount; d++) {
+                                  if (d < dayIndex) { // 현재 날짜 이전의 날짜들만
+                                    const prevDayPlaces = recommendedPlaces.slice(d * 8, (d + 1) * 8);
+                                    prevDayPlaces.forEach(place => usedPlaces.add(place.name));
+                                  }
+                                }
+                                
+                                // 현재 날짜에 사용할 장소들 선택 (중복 제거)
+                                const availablePlaces = recommendedPlaces.filter(place => !usedPlaces.has(place.name));
+                                const dayPlaces = availablePlaces.slice(0, 8); // 하루에 최대 8개 장소
                                 
                                 if (dayPlaces.length > 0) {
                                   // 시간대별로 장소 타입 배치
@@ -617,45 +713,152 @@ export function ResultStep() {
                                 </h4>
                                 <div className="space-y-3">
                                   {dayItinerary.map((item, itemIndex) => (
-                                    <div key={itemIndex} className="bg-gray-50 rounded-lg p-3 hover:bg-gray-100 transition-colors">
-                                      <div className="flex items-start gap-3">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                          <Clock className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                                          <span className="text-gray-700 font-medium">{item.time}</span>
-                                          <span className="text-lg">{getActivityIcon(item.type)}</span>
+                                    <div key={itemIndex} className="space-y-2">
+                                      {/* 이동시간 정보 표시 (첫 번째가 아닌 경우) */}
+                                      {itemIndex > 0 && (
+                                        <div className="space-y-1">
+                                          {(() => {
+                                            // 이동 거리 계산 (실제로는 위치 기반으로 계산해야 하지만, 예시를 위해 랜덤 값 사용)
+                                            const distance = Math.random() * 8 + 0.3; // 0.3km ~ 8.3km 사이
+                                            const walkingTime = Math.ceil(distance * 12); // 도보 시간 (분): 1km당 약 12분
+                                            const drivingTime = Math.max(5, Math.ceil(distance * 2.5)); // 차량 이동 시간 (분)
+                                            const bicycleTime = Math.ceil(distance * 4); // 자전거 시간 (분): 1km당 약 4분
+                                            const taxiCost = Math.ceil(3800 + (distance * 1000)); // 택시 기본요금 3800원 + 거리비용
+                                            const drivingCost = Math.ceil(distance * 500); // 자차 연료비 추정
+                                            const transitCost = distance > 10 ? 2150 : 1400; // 거리에 따른 대중교통 요금
+                                            
+                                            if (selectedTransportType === 'driving') {
+                                              // 자동차/자차 선택시 → 자차 정보만 표시
+                                              return (
+                                                <div className="flex items-center gap-2 ml-8 text-sm text-gray-500 bg-blue-50 rounded-lg px-3 py-2">
+                                                  <Navigation className="w-4 h-4 text-blue-500" />
+                                                  <span>이동시간: {drivingTime}분</span>
+                                                  <span className="text-gray-400">•</span>
+                                                  <span>거리: {distance.toFixed(1)}km</span>
+                                                  <span className="text-gray-400">•</span>
+                                                  <span>예상비용: {drivingCost.toLocaleString()}원</span>
+                                                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full ml-auto">
+                                                    🚗 자차
+                                                  </span>
+                                                </div>
+                                              );
+                                            } else if (selectedTransportType === 'transit') {
+                                              // 대중교통 선택시 → 대중교통 + 도보 (1km 미만일 때만 도보 표시)
+                                              return (
+                                                <>
+                                                  <div className="flex items-center gap-2 ml-8 text-sm text-gray-500 bg-purple-50 rounded-lg px-3 py-2">
+                                                    <Navigation className="w-4 h-4 text-purple-500" />
+                                                    <span>대중교통: {Math.ceil(drivingTime * 1.8)}분</span>
+                                                    <span className="text-gray-400">•</span>
+                                                    <span>{distance.toFixed(1)}km</span>
+                                                    <span className="text-gray-400">•</span>
+                                                    <span>{transitCost.toLocaleString()}원</span>
+                                                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full ml-auto">
+                                                      🚌 대중교통
+                                                    </span>
+                                                  </div>
+                                                  {/* 1km 미만일 때만 도보 정보 표시 */}
+                                                  {distance < 1.0 && (
+                                                    <div className="flex items-center gap-2 ml-8 text-sm text-gray-500 bg-green-50 rounded-lg px-3 py-2">
+                                                      <Navigation className="w-4 h-4 text-green-500" />
+                                                      <span>도보: {walkingTime}분</span>
+                                                      <span className="text-gray-400">•</span>
+                                                      <span>{distance.toFixed(1)}km</span>
+                                                      <span className="text-gray-400">•</span>
+                                                      <span>무료</span>
+                                                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full ml-auto">
+                                                        🚶 도보
+                                                      </span>
+                                                    </div>
+                                                  )}
+                                                </>
+                                              );
+                                            } else if (selectedTransportType === 'walking') {
+                                              // 도보 선택시 → 도보 정보만 표시
+                                              return (
+                                                <div className="flex items-center gap-2 ml-8 text-sm text-gray-500 bg-green-50 rounded-lg px-3 py-2">
+                                                  <Navigation className="w-4 h-4 text-green-500" />
+                                                  <span>이동시간: {walkingTime}분</span>
+                                                  <span className="text-gray-400">•</span>
+                                                  <span>거리: {distance.toFixed(1)}km</span>
+                                                  <span className="text-gray-400">•</span>
+                                                  <span>무료</span>
+                                                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full ml-auto">
+                                                    🚶 도보
+                                                  </span>
+                                                </div>
+                                              );
+                                            } else if (selectedTransportType === 'bicycle') {
+                                              // 자전거 선택시 → 자전거 이동시간 표시
+                                              return (
+                                                <div className="flex items-center gap-2 ml-8 text-sm text-gray-500 bg-orange-50 rounded-lg px-3 py-2">
+                                                  <Navigation className="w-4 h-4 text-orange-500" />
+                                                  <span>이동시간: {bicycleTime}분</span>
+                                                  <span className="text-gray-400">•</span>
+                                                  <span>거리: {distance.toFixed(1)}km</span>
+                                                  <span className="text-gray-400">•</span>
+                                                  <span>무료</span>
+                                                  <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full ml-auto">
+                                                    🚴 자전거
+                                                  </span>
+                                                </div>
+                                              );
+                                            } else {
+                                              // 기타 선택시 → 택시 요금으로 표시
+                                              return (
+                                                <div className="flex items-center gap-2 ml-8 text-sm text-gray-500 bg-yellow-50 rounded-lg px-3 py-2">
+                                                  <Navigation className="w-4 h-4 text-yellow-600" />
+                                                  <span>택시: {Math.ceil(drivingTime * 0.9)}분</span>
+                                                  <span className="text-gray-400">•</span>
+                                                  <span>거리: {distance.toFixed(1)}km</span>
+                                                  <span className="text-gray-400">•</span>
+                                                  <span>요금: {taxiCost.toLocaleString()}원</span>
+                                                  <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full ml-auto">
+                                                    🚕 택시
+                                                  </span>
+                                                </div>
+                                              );
+                                            }
+                                          })()}
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                            <h5 className="font-medium text-gray-900">{item.activity}</h5>
-                                            {item.rating && (
-                                              <div className="flex items-center gap-1 bg-yellow-50 px-2 py-0.5 rounded-full">
-                                                <Star className="w-3 h-3 text-yellow-500 fill-current" />
-                                                <span className="text-xs text-yellow-700 font-medium">{item.rating}</span>
-                                                {item.reviewCount && (
-                                                  <span className="text-xs text-yellow-600">({item.reviewCount})</span>
-                                                )}
-                                              </div>
+                                      )}
+                                      
+                                      {/* 기존 활동 정보 */}
+                                      <div className="bg-gray-50 rounded-lg p-3 hover:bg-gray-100 transition-colors">
+                                        <div className="flex items-start gap-3">
+                                          <div className="flex items-center gap-2 min-w-0">
+                                            <Clock className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                                            <span className="text-gray-700 font-medium">{item.time}</span>
+                                            <span className="text-lg">{getActivityIcon(item.type)}</span>
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                              <h5 className="font-medium text-gray-900">{item.activity}</h5>
+                                              {item.rating && (
+                                                <div className="flex items-center gap-1 bg-yellow-50 px-2 py-0.5 rounded-full">
+                                                  <Star className="w-3 h-3 text-yellow-500 fill-current" />
+                                                  <span className="text-xs text-yellow-700 font-medium">{item.rating}</span>
+                                                  {item.reviewCount && (
+                                                    <span className="text-xs text-yellow-600">({item.reviewCount})</span>
+                                                  )}
+                                                </div>
+                                              )}
+                                              {item.matchScore && item.matchScore > 70 && (
+                                                <div className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                                                  추천 {Math.round(item.matchScore)}점
+                                                </div>
+                                              )}
+                                            </div>
+                                            <p className="text-sm text-gray-600 mb-1">📍 {item.location}</p>
+                                            {item.description && (
+                                              <p className="text-sm text-gray-500">{item.description}</p>
                                             )}
-                                            {item.matchScore && item.matchScore > 70 && (
-                                              <div className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
-                                                추천 {Math.round(item.matchScore)}점
-                                              </div>
-                                            )}
-                                            {item.phone && (
-                                              <div className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
-                                                📞
+                                            {item.rating && item.rating >= 4.5 && (
+                                              <div className="mt-1 text-xs text-green-600 font-medium">
+                                                ⭐ 높은 평점의 추천 장소입니다!
                                               </div>
                                             )}
                                           </div>
-                                          <p className="text-sm text-gray-600 mb-1">📍 {item.location}</p>
-                                          {item.description && (
-                                            <p className="text-sm text-gray-500">{item.description}</p>
-                                          )}
-                                          {item.rating && item.rating >= 4.5 && (
-                                            <div className="mt-1 text-xs text-green-600 font-medium">
-                                              ⭐ 높은 평점의 추천 장소입니다!
-                                            </div>
-                                          )}
                                         </div>
                                       </div>
                                     </div>
@@ -709,8 +912,8 @@ export function ResultStep() {
                 {showMap ? (
                   <div className="relative bg-gray-100">
                     <KakaoMap
-                      center={getMapCenter()}
-                      markers={getDestinationMarkers()}
+                      center={mapCenter}
+                      markers={mapMarkers}
                       height="720px"
                       level={5}
                       className="w-full"

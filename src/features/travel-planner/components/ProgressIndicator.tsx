@@ -13,7 +13,7 @@ const steps = [
   { id: 5, title: '인원 정보', description: '인원 수 및 연령대' },
   { id: 6, title: '관심사 선택', description: '여행 스타일 설정' },
   { id: 7, title: '필수 장소', description: '꼭 가고 싶은 곳' },
-  { id: 8, title: '예산 설정', description: '여행 경비' },
+  { id: 8, title: '일정 생성', description: '맞춤 여행 계획' },
 ]
 
 export function ProgressIndicator() {

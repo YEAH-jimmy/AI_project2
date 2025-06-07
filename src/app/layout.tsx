@@ -27,10 +27,16 @@ export default function RootLayout({
   return (
     <html suppressHydrationWarning>
       <head>
+        {/* 
+          카카오맵 SDK 로드 설정:
+          - autoload=false: document.write 오류 방지
+          - libraries: 필요한 기능 지정
+          - beforeInteractive: 가능한 빠르게 로드
+        */}
         <Script
-          id="kakao-map-script"
-          src="//dapi.kakao.com/v2/maps/sdk.js?appkey=792bf600641432ebcbd645acbd5c823e&libraries=services,clusterer,drawing"
           strategy="beforeInteractive"
+          src="//dapi.kakao.com/v2/maps/sdk.js?appkey=b96ce35e1cd6d37f165e9b54ebc06ae8&libraries=services,clusterer,drawing&autoload=false"
+          id="kakao-maps-sdk"
         />
       </head>
       <body
