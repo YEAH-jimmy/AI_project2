@@ -281,10 +281,28 @@ export function ResultStep() {
       Object.entries(optimizedItinerary).forEach(([dayStr, places]) => {
         const day = parseInt(dayStr);
         places.forEach((place, index) => {
+          // 카테고리에 따른 아이콘 설정
+          let icon = '';
+          if (place.category.includes('숙소 체크인')) {
+            icon = '🏨 ';
+          } else if (place.category.includes('숙소 체크아웃')) {
+            icon = '🛄 ';
+          } else if (place.category.includes('음식점') || place.category.includes('맛집')) {
+            icon = '🍽️ ';
+          } else if (place.category.includes('카페')) {
+            icon = '☕ ';
+          } else if (place.category.includes('관광') || place.category.includes('명소')) {
+            icon = '🏛️ ';
+          } else if (place.category.includes('쇼핑')) {
+            icon = '🛍️ ';
+          } else {
+            icon = '📍 ';
+          }
+          
           markers.push({
             lat: place.lat,
             lng: place.lng,
-            name: `${day + 1}일차 ${index + 1}번: ${place.name}`,
+            name: `${day + 1}일차 ${index + 1}번: ${icon}${place.name.replace('🏨 ', '').replace('🛄 ', '')}`,
             description: `⭐ ${place.rating || 'N/A'} (${place.reviewCount || 0}명) | ${place.category}`,
             order: index + 1,
             day: day + 1
@@ -1295,6 +1313,8 @@ export function ResultStep() {
                                 case 'shopping': return '🛍️';
                                 case 'transport': return '🚗';
                                 case 'accommodation': return '🏨';
+                                case 'checkin': return '🏨';
+                                case 'checkout': return '🛄';
                                 default: return '📍';
                               }
                             };

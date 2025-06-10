@@ -419,6 +419,40 @@ export const generateOptimizedItinerary = async (
         startLocation,
         transportType
       );
+
+      // 4-1. 첫 번째 날이 아닌 경우 체크아웃을 맨 앞에 추가 (전날 숙소 정보 활용)
+      if (day > 0) {
+        const previousDayPlaces = itinerary[day - 1];
+        if (previousDayPlaces && previousDayPlaces.length > 0) {
+          // 전날 마지막에 체크인한 숙소 찾기
+          const previousCheckIn = previousDayPlaces.find(place => 
+            place.category === '숙소 체크인'
+          );
+          
+          if (previousCheckIn && previousCheckIn.accommodationInfo) {
+            const checkOutPlace: RecommendedPlace = {
+              id: `checkout_${day - 1}_${previousCheckIn.id}`,
+              name: previousCheckIn.name.replace('체크인', '체크아웃'),
+              category: '숙소 체크아웃',
+              address: previousCheckIn.address,
+              lat: previousCheckIn.lat,
+              lng: previousCheckIn.lng,
+              rating: previousCheckIn.rating,
+              reviewCount: previousCheckIn.reviewCount,
+              description: previousCheckIn.description,
+              phone: previousCheckIn.phone,
+              tags: ['숙박', '체크아웃', accommodationType],
+              source: 'kakao' as const,
+              suggestedVisitDuration: 20, // 체크아웃 시간 20분
+              accommodationInfo: previousCheckIn.accommodationInfo
+            };
+            
+            // 하루 일정 맨 앞에 체크아웃 추가
+            optimizedDayPlaces.unshift(checkOutPlace);
+            console.log(`${day + 1}일차 체크아웃 추가: ${checkOutPlace.name}`);
+          }
+        }
+      }
       
       // 5. 마지막 장소 주변 숙소 추천 추가
       if (optimizedDayPlaces.length > 0) {
@@ -437,13 +471,13 @@ export const generateOptimizedItinerary = async (
           );
           
           if (accommodations.length > 0) {
-            // 가장 추천하는 숙소를 일정에 추가
+            // 가장 추천하는 숙소를 체크인으로 추가
             const bestAccommodation = accommodations[0];
             
-            const accommodationPlace: RecommendedPlace = {
-              id: `accommodation_${day}_${bestAccommodation.id}`,
-              name: `🏨 ${bestAccommodation.name}`,
-              category: '숙박시설',
+            const checkInPlace: RecommendedPlace = {
+              id: `checkin_${day}_${bestAccommodation.id}`,
+              name: `🏨 ${bestAccommodation.name} 체크인`,
+              category: '숙소 체크인',
               address: bestAccommodation.address,
               lat: bestAccommodation.lat,
               lng: bestAccommodation.lng,
@@ -451,9 +485,9 @@ export const generateOptimizedItinerary = async (
               reviewCount: bestAccommodation.reviewCount,
               description: `${bestAccommodation.priceRange} | ${bestAccommodation.amenities?.slice(0, 3).join(', ')}`,
               phone: bestAccommodation.phone,
-              tags: ['숙박', accommodationType, '추천숙소'],
+              tags: ['숙박', '체크인', accommodationType, '추천숙소'],
               source: 'kakao' as const,
-              suggestedVisitDuration: 0, // 숙소는 방문 시간 없음
+              suggestedVisitDuration: 30, // 체크인 시간 30분
               // 추가 숙소 정보
               accommodationInfo: {
                 priceRange: bestAccommodation.priceRange,
@@ -463,54 +497,57 @@ export const generateOptimizedItinerary = async (
               }
             };
             
-            // 마지막 일정 다음에 숙소 추가
-            optimizedDayPlaces.push(accommodationPlace);
+            // 마지막 일정 다음에 체크인 추가
+            optimizedDayPlaces.push(checkInPlace);
             
-            console.log(`${day + 1}일차 숙소 추천 완료: ${bestAccommodation.name} (${bestAccommodation.distance?.toFixed(1)}km)`);
+            console.log(`${day + 1}일차 숙소 체크인 추가: ${bestAccommodation.name} (${bestAccommodation.distance?.toFixed(1)}km)`);
           } else {
-            // 숙소를 찾지 못한 경우 기본 숙소 표시
-            const fallbackAccommodation: RecommendedPlace = {
-              id: `accommodation_${day}_fallback`,
-              name: `🏨 ${destination} 지역 숙소`,
-              category: '숙박시설',
+            // 숙소를 찾지 못한 경우 기본 체크인 표시
+            const fallbackCheckIn: RecommendedPlace = {
+              id: `checkin_${day}_fallback`,
+              name: `🏨 ${destination} 지역 숙소 체크인`,
+              category: '숙소 체크인',
               address: `${destination} 중심가`,
               lat: lastPlace.lat,
               lng: lastPlace.lng,
               description: '이 지역의 숙소를 직접 검색해보세요',
-              tags: ['숙박', accommodationType],
+              tags: ['숙박', '체크인', accommodationType],
               source: 'kakao' as const,
-              suggestedVisitDuration: 0
+              suggestedVisitDuration: 30
             };
             
-            optimizedDayPlaces.push(fallbackAccommodation);
-            console.log(`${day + 1}일차 기본 숙소 표시`);
+            optimizedDayPlaces.push(fallbackCheckIn);
+            console.log(`${day + 1}일차 기본 체크인 표시`);
           }
         } catch (error) {
           console.error(`${day + 1}일차 숙소 추천 중 오류:`, error);
           
-          // 오류 발생 시에도 기본 숙소 정보는 표시
-          const errorAccommodation: RecommendedPlace = {
-            id: `accommodation_${day}_error`,
-            name: `🏨 ${destination} 지역 숙소`,
-            category: '숙박시설',
+          // 오류 발생 시에도 기본 체크인 정보는 표시
+          const errorCheckIn: RecommendedPlace = {
+            id: `checkin_${day}_error`,
+            name: `🏨 ${destination} 지역 숙소 체크인`,
+            category: '숙소 체크인',
             address: `${destination} 중심가`,
             lat: lastPlace.lat,
             lng: lastPlace.lng,
             description: '숙소 정보를 불러올 수 없습니다. 직접 검색해보세요.',
-            tags: ['숙박', accommodationType],
+            tags: ['숙박', '체크인', accommodationType],
             source: 'kakao' as const,
-            suggestedVisitDuration: 0
+            suggestedVisitDuration: 30
           };
           
-          optimizedDayPlaces.push(errorAccommodation);
+          optimizedDayPlaces.push(errorCheckIn);
         }
       }
       
       itinerary[day] = optimizedDayPlaces;
       
-      // 사용된 장소들을 기록하여 중복 방지 (숙소 제외)
+      // 사용된 장소들을 기록하여 중복 방지 (숙소 체크인/체크아웃 제외)
       optimizedDayPlaces
-        .filter(place => !place.category.includes('숙박'))
+        .filter(place => 
+          !place.category.includes('숙소 체크인') && 
+          !place.category.includes('숙소 체크아웃')
+        )
         .forEach(place => usedPlaces.add(place.id));
     }
     
