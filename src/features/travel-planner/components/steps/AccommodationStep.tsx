@@ -373,11 +373,7 @@ export function AccommodationStep() {
                             {/* 거리는 아직 일정이 확정되지 않았으므로 표시하지 않음 */}
                           </div>
                           
-                          {accommodation.priceRange && (
-                            <div className="text-sm font-medium text-blue-600 mb-2">
-                              💰 {accommodation.priceRange}
-                            </div>
-                          )}
+                          {/* 가격 정보는 하드코딩된 데이터이므로 표시하지 않음 */}
                           
                           {accommodation.amenities && accommodation.amenities.length > 0 && (
                             <div className="flex flex-wrap gap-1">
