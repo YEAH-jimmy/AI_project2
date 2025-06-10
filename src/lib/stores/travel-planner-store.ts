@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
+import { AccommodationInfo } from '../kakao-map'
 
 export interface TravelPlanData {
   destination?: string
@@ -71,8 +72,12 @@ interface TravelPlannerState {
   // Generated itinerary
   generatedItinerary?: GeneratedItinerary
   
+  // Recommended accommodations
+  recommendedAccommodations?: AccommodationInfo[]
+  
   // Loading states
   isGenerating: boolean
+  isLoadingAccommodations: boolean
   
   // Actions
   setCurrentStep: (step: number) => void
@@ -80,6 +85,8 @@ interface TravelPlannerState {
   resetPlanData: () => void
   setGeneratedItinerary: (itinerary: GeneratedItinerary) => void
   setIsGenerating: (loading: boolean) => void
+  setRecommendedAccommodations: (accommodations: AccommodationInfo[]) => void
+  setIsLoadingAccommodations: (loading: boolean) => void
 }
 
 const initialPlanData: TravelPlanData = {
@@ -107,6 +114,7 @@ export const useTravelPlannerStore = create<TravelPlannerState>()(
         currentStep: 1,
         planData: initialPlanData,
         isGenerating: false,
+        isLoadingAccommodations: false,
         
         setCurrentStep: (step) => {
           // 현재 단계를 로깅
@@ -130,7 +138,9 @@ export const useTravelPlannerStore = create<TravelPlannerState>()(
             planData: { ...initialPlanData }, 
             currentStep: 1,
             generatedItinerary: undefined,
-            isGenerating: false
+            isGenerating: false,
+            recommendedAccommodations: undefined,
+            isLoadingAccommodations: false
           })
           
           // 로컬 스토리지도 클리어하여 완전 초기화
@@ -146,6 +156,12 @@ export const useTravelPlannerStore = create<TravelPlannerState>()(
         
         setIsGenerating: (loading) => 
           set({ isGenerating: loading }),
+        
+        setRecommendedAccommodations: (accommodations) =>
+          set({ recommendedAccommodations: accommodations }),
+        
+        setIsLoadingAccommodations: (loading) =>
+          set({ isLoadingAccommodations: loading }),
       }),
       {
         name: 'travel-planner-storage',

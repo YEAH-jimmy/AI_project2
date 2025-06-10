@@ -1,5 +1,5 @@
 // 장소 추천 시스템 - 네이버 + 카카오 API 조합
-import { searchPlaces, KakaoPlace, calculateTravelTime, calculateSequentialTravelTimes, optimizeRouteWithTravelTime, TravelTimeInfo, formatTravelTime, formatTravelCost } from './kakao-map'
+import { searchPlaces, KakaoPlace, calculateTravelTime, calculateSequentialTravelTimes, optimizeRouteWithTravelTime, TravelTimeInfo, formatTravelTime, formatTravelCost, recommendAccommodationNearLastPlace, AccommodationInfo } from './kakao-map'
 
 // 네이버 플레이스 API 타입 정의
 interface NaverPlace {
@@ -42,6 +42,13 @@ export interface RecommendedPlace {
   // 이동시간 관련 정보 추가
   travelTimeFromPrevious?: TravelTimeInfo
   suggestedVisitDuration?: number // 권장 방문 시간 (분)
+  // 숙소 관련 정보 추가
+  accommodationInfo?: {
+    priceRange?: string
+    amenities?: string[]
+    distance?: number
+    alternativeOptions?: AccommodationInfo[]
+  }
 }
 
 // 사용자 선호도 기반 카테고리 매핑
@@ -371,16 +378,17 @@ const getRegionSpecificQueries = (region: string): string[] => {
   return regionQueries[region] || [`${region} 유명한곳`, `${region} 인기장소`];
 };
 
-// 여행 일정에 최적화된 장소 추천
+// 여행 일정에 최적화된 장소 추천 (숙소 추천 포함)
 export const generateOptimizedItinerary = async (
   destination: string,
   preferences: string[],
   days: number,
   startLocation?: { lat: number; lng: number },
-  transportType: 'walking' | 'driving' | 'transit' = 'driving'
+  transportType: 'walking' | 'driving' | 'transit' = 'driving',
+  accommodationType: string = 'hotel'
 ): Promise<{ [day: number]: RecommendedPlace[] }> => {
   try {
-    console.log('최적화된 일정 생성 시작:', { destination, preferences, days, transportType });
+    console.log('최적화된 일정 생성 시작:', { destination, preferences, days, transportType, accommodationType });
     
     // 1. 모든 추천 장소 수집 (더 많이 가져오기)
     const allPlaces = await getPopularPlacesByRegion(destination, preferences, days * 12);
@@ -412,12 +420,101 @@ export const generateOptimizedItinerary = async (
         transportType
       );
       
+      // 5. 마지막 장소 주변 숙소 추천 추가
+      if (optimizedDayPlaces.length > 0) {
+        const lastPlace = optimizedDayPlaces[optimizedDayPlaces.length - 1];
+        
+        try {
+          console.log(`${day + 1}일차 마지막 일정 "${lastPlace.name}" 주변 숙소 검색 중...`);
+          
+          const accommodations = await recommendAccommodationNearLastPlace(
+            {
+              name: lastPlace.name,
+              lat: lastPlace.lat,
+              lng: lastPlace.lng
+            },
+            accommodationType
+          );
+          
+          if (accommodations.length > 0) {
+            // 가장 추천하는 숙소를 일정에 추가
+            const bestAccommodation = accommodations[0];
+            
+            const accommodationPlace: RecommendedPlace = {
+              id: `accommodation_${day}_${bestAccommodation.id}`,
+              name: `🏨 ${bestAccommodation.name}`,
+              category: '숙박시설',
+              address: bestAccommodation.address,
+              lat: bestAccommodation.lat,
+              lng: bestAccommodation.lng,
+              rating: bestAccommodation.rating,
+              reviewCount: bestAccommodation.reviewCount,
+              description: `${bestAccommodation.priceRange} | ${bestAccommodation.amenities?.slice(0, 3).join(', ')}`,
+              phone: bestAccommodation.phone,
+              tags: ['숙박', accommodationType, '추천숙소'],
+              source: 'kakao' as const,
+              suggestedVisitDuration: 0, // 숙소는 방문 시간 없음
+              // 추가 숙소 정보
+              accommodationInfo: {
+                priceRange: bestAccommodation.priceRange,
+                amenities: bestAccommodation.amenities,
+                distance: bestAccommodation.distance,
+                alternativeOptions: accommodations.slice(1, 3) // 대안 숙소 2개
+              }
+            };
+            
+            // 마지막 일정 다음에 숙소 추가
+            optimizedDayPlaces.push(accommodationPlace);
+            
+            console.log(`${day + 1}일차 숙소 추천 완료: ${bestAccommodation.name} (${bestAccommodation.distance?.toFixed(1)}km)`);
+          } else {
+            // 숙소를 찾지 못한 경우 기본 숙소 표시
+            const fallbackAccommodation: RecommendedPlace = {
+              id: `accommodation_${day}_fallback`,
+              name: `🏨 ${destination} 지역 숙소`,
+              category: '숙박시설',
+              address: `${destination} 중심가`,
+              lat: lastPlace.lat,
+              lng: lastPlace.lng,
+              description: '이 지역의 숙소를 직접 검색해보세요',
+              tags: ['숙박', accommodationType],
+              source: 'kakao' as const,
+              suggestedVisitDuration: 0
+            };
+            
+            optimizedDayPlaces.push(fallbackAccommodation);
+            console.log(`${day + 1}일차 기본 숙소 표시`);
+          }
+        } catch (error) {
+          console.error(`${day + 1}일차 숙소 추천 중 오류:`, error);
+          
+          // 오류 발생 시에도 기본 숙소 정보는 표시
+          const errorAccommodation: RecommendedPlace = {
+            id: `accommodation_${day}_error`,
+            name: `🏨 ${destination} 지역 숙소`,
+            category: '숙박시설',
+            address: `${destination} 중심가`,
+            lat: lastPlace.lat,
+            lng: lastPlace.lng,
+            description: '숙소 정보를 불러올 수 없습니다. 직접 검색해보세요.',
+            tags: ['숙박', accommodationType],
+            source: 'kakao' as const,
+            suggestedVisitDuration: 0
+          };
+          
+          optimizedDayPlaces.push(errorAccommodation);
+        }
+      }
+      
       itinerary[day] = optimizedDayPlaces;
       
-      // 사용된 장소들을 기록하여 중복 방지
-      optimizedDayPlaces.forEach(place => usedPlaces.add(place.id));
+      // 사용된 장소들을 기록하여 중복 방지 (숙소 제외)
+      optimizedDayPlaces
+        .filter(place => !place.category.includes('숙박'))
+        .forEach(place => usedPlaces.add(place.id));
     }
     
+    console.log(`총 ${days}일 일정 생성 완료 (숙소 포함)`);
     return itinerary;
   } catch (error) {
     console.error('일정 생성 오류:', error);

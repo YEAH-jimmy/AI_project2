@@ -356,12 +356,14 @@ export function ResultStep() {
           }
           const startLocation = destinations[planData.destination] || { lat: 37.5665, lng: 126.9780 };
           
-          // 최적화된 일정 생성
+          // 최적화된 일정 생성 (숙소 타입 포함)
           const itinerary = await generateOptimizedItinerary(
             planData.destination,
             planData.interests,
             days,
-            startLocation
+            startLocation,
+            'driving', // 기본 교통수단
+            planData.accommodationType || 'hotel' // 숙소 타입 전달
           );
           
           console.log('생성된 일정:', itinerary)

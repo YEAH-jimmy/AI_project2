@@ -841,4 +841,225 @@ export const getValidatedTransportPoint = async (
   }
   
   return null;
+};
+
+// 숙소 검색 관련 인터페이스 및 함수들
+export interface AccommodationInfo {
+  id: string;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  category: string;
+  phone?: string;
+  url?: string;
+  rating?: number;
+  reviewCount?: number;
+  priceRange?: string;
+  amenities?: string[];
+  distance?: number; // 기준점으로부터의 거리 (km)
+}
+
+// 숙소 타입별 검색 키워드
+const accommodationKeywords: { [key: string]: string[] } = {
+  'hotel': ['호텔', '비즈니스호텔', '관광호텔'],
+  'airbnb': ['펜션', '민박', '게스트하우스', '에어비앤비'],
+  'guesthouse': ['게스트하우스', '민박', '청년여관'],
+  'resort': ['리조트', '콘도', '리조트호텔'],
+  'other': ['모텔', '여관', '펜션', '민박']
+};
+
+/**
+ * 특정 위치 주변의 숙소를 검색합니다
+ * @param lat 위도
+ * @param lng 경도  
+ * @param accommodationType 숙소 타입
+ * @param radius 검색 반경 (km, 기본값: 10km)
+ * @returns 숙소 목록
+ */
+export const searchAccommodationsNearby = async (
+  lat: number,
+  lng: number,
+  accommodationType: string = 'hotel',
+  radius: number = 10
+): Promise<AccommodationInfo[]> => {
+  try {
+    const apiKey = process.env.NEXT_PUBLIC_KAKAO_REST_API_KEY || KAKAO_REST_API_KEY;
+    
+    if (!apiKey) {
+      throw new Error('카카오 REST API 키가 설정되지 않았습니다.');
+    }
+
+    console.log(`숙소 검색 시작: 위치=(${lat}, ${lng}), 타입=${accommodationType}, 반경=${radius}km`);
+
+    const keywords = accommodationKeywords[accommodationType] || accommodationKeywords['hotel'];
+    const allAccommodations: AccommodationInfo[] = [];
+
+    // 각 키워드로 검색하여 결과 수집
+    for (const keyword of keywords) {
+      try {
+        const url = new URL('https://dapi.kakao.com/v2/local/search/keyword.json');
+        url.searchParams.append('query', keyword);
+        url.searchParams.append('category_group_code', 'AD5'); // 숙박 시설
+        url.searchParams.append('x', lng.toString());
+        url.searchParams.append('y', lat.toString());
+        url.searchParams.append('radius', (radius * 1000).toString()); // m 단위로 변환
+        url.searchParams.append('size', '15');
+        url.searchParams.append('sort', 'distance'); // 거리순 정렬
+
+        const response = await fetch(url.toString(), {
+          headers: {
+            'Authorization': `KakaoAK ${apiKey}`,
+          },
+        });
+
+        if (!response.ok) {
+          console.warn(`숙소 검색 실패 (${keyword}):`, response.status);
+          continue;
+        }
+
+        const data: KakaoSearchResponse = await response.json();
+        
+        // 결과를 AccommodationInfo 형태로 변환
+        const accommodations = data.documents.map(place => {
+          const distance = place.distance ? parseFloat(place.distance) / 1000 : 0; // km 변환
+          
+          return {
+            id: place.id,
+            name: place.place_name,
+            address: place.address_name,
+            lat: parseFloat(place.y),
+            lng: parseFloat(place.x),
+            category: place.category_name,
+            phone: place.phone,
+            url: place.place_url,
+            rating: generateSimulatedRating(place),
+            reviewCount: generateSimulatedReviewCount(place),
+            priceRange: generatePriceRange(place, accommodationType),
+            amenities: generateAmenities(place, accommodationType),
+            distance: distance
+          };
+        });
+
+        allAccommodations.push(...accommodations);
+        
+        console.log(`${keyword} 검색 결과: ${accommodations.length}개`);
+        
+      } catch (error) {
+        console.warn(`${keyword} 검색 중 오류:`, error);
+        continue;
+      }
+    }
+
+    // 중복 제거 (같은 이름과 주소)
+    const uniqueAccommodations = allAccommodations.filter((accommodation, index, arr) =>
+      arr.findIndex(a => a.name === accommodation.name && a.address === accommodation.address) === index
+    );
+
+    // 거리순 정렬 후 상위 10개 선택
+    const sortedAccommodations = uniqueAccommodations
+      .sort((a, b) => (a.distance || 0) - (b.distance || 0))
+      .slice(0, 10);
+
+    console.log(`총 ${sortedAccommodations.length}개 숙소 검색 완료`);
+    
+    return sortedAccommodations;
+    
+  } catch (error) {
+    console.error('숙소 검색 중 오류:', error);
+    return [];
+  }
+};
+
+/**
+ * 마지막 일정 장소 주변의 숙소를 추천합니다
+ * @param lastPlace 마지막 일정 장소
+ * @param accommodationType 숙소 타입
+ * @returns 추천 숙소 목록
+ */
+export const recommendAccommodationNearLastPlace = async (
+  lastPlace: { name: string; lat: number; lng: number },
+  accommodationType: string = 'hotel'
+): Promise<AccommodationInfo[]> => {
+  console.log(`마지막 일정 "${lastPlace.name}" 주변 숙소 추천 시작`);
+  
+  const accommodations = await searchAccommodationsNearby(
+    lastPlace.lat,
+    lastPlace.lng,
+    accommodationType,
+    5 // 5km 반경으로 축소하여 더 가까운 숙소 추천
+  );
+
+  // 평점과 거리를 고려한 추천 점수 계산
+  const scoredAccommodations = accommodations.map(acc => ({
+    ...acc,
+    recommendationScore: calculateAccommodationScore(acc)
+  })).sort((a, b) => b.recommendationScore - a.recommendationScore);
+
+  return scoredAccommodations.slice(0, 5); // 상위 5개 추천
+};
+
+// 숙소 추천 점수 계산
+const calculateAccommodationScore = (accommodation: AccommodationInfo): number => {
+  let score = 0;
+  
+  // 평점 점수 (40%)
+  if (accommodation.rating) {
+    score += (accommodation.rating / 5) * 40;
+  }
+  
+  // 거리 점수 (30%) - 가까울수록 높은 점수
+  if (accommodation.distance !== undefined) {
+    const distanceScore = Math.max(0, 30 - (accommodation.distance * 6)); // 5km 이내에서 최대 점수
+    score += distanceScore;
+  }
+  
+  // 리뷰 수 점수 (20%)
+  if (accommodation.reviewCount) {
+    const reviewScore = Math.min(20, accommodation.reviewCount / 50 * 20); // 최대 20점
+    score += reviewScore;
+  }
+  
+  // 카테고리 보너스 (10%)
+  if (accommodation.category?.includes('호텔') || accommodation.category?.includes('리조트')) {
+    score += 10;
+  } else if (accommodation.category?.includes('펜션') || accommodation.category?.includes('게스트')) {
+    score += 7;
+  }
+  
+  return Math.round(score * 10) / 10;
+};
+
+// 가격대 시뮬레이션
+const generatePriceRange = (place: KakaoPlace, accommodationType: string): string => {
+  const priceRanges: { [key: string]: string[] } = {
+    'hotel': ['150,000-300,000원', '80,000-150,000원', '50,000-100,000원'],
+    'resort': ['200,000-500,000원', '150,000-300,000원', '100,000-200,000원'],
+    'guesthouse': ['30,000-80,000원', '20,000-50,000원', '15,000-30,000원'],
+    'airbnb': ['60,000-120,000원', '40,000-80,000원', '30,000-60,000원'],
+    'other': ['40,000-80,000원', '25,000-50,000원', '20,000-40,000원']
+  };
+  
+  const ranges = priceRanges[accommodationType] || priceRanges['hotel'];
+  const index = Math.floor(Math.random() * ranges.length);
+  return ranges[index];
+};
+
+// 편의시설 시뮬레이션
+const generateAmenities = (place: KakaoPlace, accommodationType: string): string[] => {
+  const baseAmenities = ['무료 Wi-Fi', '24시간 프런트', '주차장'];
+  
+  const typeSpecificAmenities: { [key: string]: string[] } = {
+    'hotel': ['룸서비스', '피트니스센터', '비즈니스센터', '레스토랑', '라운지'],
+    'resort': ['수영장', '스파', '사우나', '골프장', '테니스장', '키즈클럽'],
+    'guesthouse': ['공용주방', '세탁시설', '라운지', '짐보관서비스'],
+    'airbnb': ['주방시설', '세탁기', '건조기', 'Netflix', '셀프체크인'],
+    'other': ['온천', '바베큐시설', '픽업서비스', '자전거대여']
+  };
+  
+  const specificAmenities = typeSpecificAmenities[accommodationType] || typeSpecificAmenities['hotel'];
+  const randomCount = Math.floor(Math.random() * 4) + 2; // 2-5개
+  const shuffled = [...baseAmenities, ...specificAmenities].sort(() => Math.random() - 0.5);
+  
+  return shuffled.slice(0, randomCount);
 }; 
