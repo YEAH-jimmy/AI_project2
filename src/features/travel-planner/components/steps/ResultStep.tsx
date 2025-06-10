@@ -192,9 +192,9 @@ export function ResultStep() {
     const minLng = Math.min(...lngs);
     const maxLng = Math.max(...lngs);
     
-    // 경계에 여백 추가 (10% 패딩)
-    const latPadding = (maxLat - minLat) * 0.15; // 15% 여백으로 증가
-    const lngPadding = (maxLng - minLng) * 0.15;
+    // 경계에 여백 추가 (5% 패딩으로 축소)
+    const latPadding = (maxLat - minLat) * 0.05; // 15%에서 5%로 축소
+    const lngPadding = (maxLng - minLng) * 0.05;
     
     const paddedMinLat = minLat - latPadding;
     const paddedMaxLat = maxLat + latPadding;
@@ -210,15 +210,15 @@ export function ResultStep() {
     const lngRange = paddedMaxLng - paddedMinLng;
     const maxRange = Math.max(latRange, lngRange);
     
-    // 모든 마커가 보이도록 충분히 축소된 줌 레벨 설정
+    // 더 확대된 줌 레벨 설정 (숫자가 낮을수록 더 확대됨)
     let level;
-    if (maxRange > 0.5) level = 12;       // 매우 넓은 범위 → 많이 축소
-    else if (maxRange > 0.3) level = 11;  // 넓은 범위
-    else if (maxRange > 0.15) level = 10; // 중간 범위  
-    else if (maxRange > 0.08) level = 9;  // 좁은 범위
-    else if (maxRange > 0.04) level = 8;  // 매우 좁은 범위
-    else if (maxRange > 0.02) level = 7;  // 근거리
-    else level = 6;                       // 매우 가까운 장소들
+    if (maxRange > 0.3) level = 9;        // 매우 넓은 범위 → 적당히 축소
+    else if (maxRange > 0.15) level = 8;  // 넓은 범위
+    else if (maxRange > 0.08) level = 7;  // 중간 범위  
+    else if (maxRange > 0.04) level = 6;  // 좁은 범위
+    else if (maxRange > 0.02) level = 5;  // 매우 좁은 범위
+    else if (maxRange > 0.01) level = 4;  // 근거리
+    else level = 3;                       // 매우 가까운 장소들
     
     console.log(`지도 범위 최적화: 범위=${maxRange.toFixed(4)}, 레벨=${level}, 중심=(${centerLat.toFixed(4)}, ${centerLng.toFixed(4)})`);
     
