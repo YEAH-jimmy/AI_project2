@@ -384,7 +384,11 @@ export function ResultStep() {
 
           console.log('예약한 숙소 정보:', bookedAccommodation);
 
-          // 최적화된 일정 생성 (숙소 타입 및 예약한 숙소 정보 포함)
+          // 필수 방문 장소 정보 준비
+          const mustVisitPlaces = planData.mustVisitPlaces || [];
+          console.log('필수 방문 장소:', mustVisitPlaces);
+
+          // 최적화된 일정 생성 (숙소 타입, 예약한 숙소, 필수 방문 장소 정보 포함)
           const itinerary = await generateOptimizedItinerary(
             planData.destination,
             planData.interests,
@@ -392,7 +396,8 @@ export function ResultStep() {
             startLocation,
             'driving', // 기본 교통수단
             planData.accommodationType || 'hotel', // 숙소 타입 전달
-            bookedAccommodation // 예약한 숙소 정보 전달
+            bookedAccommodation, // 예약한 숙소 정보 전달
+            mustVisitPlaces // 필수 방문 장소 전달
           );
           
           console.log('생성된 일정:', itinerary)

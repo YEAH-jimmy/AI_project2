@@ -391,10 +391,11 @@ export const generateOptimizedItinerary = async (
     address: string;
     lat?: number;
     lng?: number;
-  }
+  },
+  mustVisitPlaces?: string[]
 ): Promise<{ [day: number]: RecommendedPlace[] }> => {
   try {
-    console.log('최적화된 일정 생성 시작:', { destination, preferences, days, transportType, accommodationType, bookedAccommodation });
+    console.log('최적화된 일정 생성 시작:', { destination, preferences, days, transportType, accommodationType, bookedAccommodation, mustVisitPlaces });
     
     // 1. 모든 추천 장소 수집 (더 많이 가져오기)
     const allPlaces = await getPopularPlacesByRegion(destination, preferences, days * 12);
@@ -402,11 +403,61 @@ export const generateOptimizedItinerary = async (
     if (allPlaces.length === 0) {
       throw new Error('추천 장소를 찾을 수 없습니다.');
     }
+
+    // 2. 필수 방문 장소들을 실제 장소 정보로 변환
+    let mustVisitActualPlaces: RecommendedPlace[] = [];
+    if (mustVisitPlaces && mustVisitPlaces.length > 0) {
+      console.log('필수 방문 장소 검색 시작:', mustVisitPlaces);
+      
+      for (const placeName of mustVisitPlaces) {
+        try {
+          // 각 필수 방문 장소를 실제로 검색하여 정확한 정보 획득
+          const searchQuery = `${destination} ${placeName}`;
+          const searchResults = await searchIntegratedPlaces(searchQuery, undefined, preferences);
+          
+          if (searchResults.length > 0) {
+            // 가장 관련성 높은 결과 선택
+            const bestMatch = searchResults.find(place => 
+              place.name.toLowerCase().includes(placeName.toLowerCase()) ||
+              placeName.toLowerCase().includes(place.name.toLowerCase())
+            ) || searchResults[0];
+            
+            // 필수 방문 장소임을 표시하고 높은 우선순위 부여
+            const mustVisitPlace: RecommendedPlace = {
+              ...bestMatch,
+              id: `must_visit_${bestMatch.id}`,
+              tags: [...(bestMatch.tags || []), '필수방문'],
+              matchScore: (bestMatch.matchScore || 0) + 100, // 높은 우선순위
+              description: `${bestMatch.description} (필수 방문 장소)`
+            };
+            
+            mustVisitActualPlaces.push(mustVisitPlace);
+            console.log(`필수 방문 장소 검색 완료: ${placeName} -> ${bestMatch.name}`);
+          } else {
+            console.warn(`필수 방문 장소 검색 실패: ${placeName}`);
+          }
+        } catch (error) {
+          console.error(`필수 방문 장소 검색 오류 (${placeName}):`, error);
+        }
+      }
+    }
+
+    // 3. 필수 방문 장소들을 전체 장소 목록에 추가 (중복 제거)
+    const combinedPlaces = [...mustVisitActualPlaces];
+    allPlaces.forEach(place => {
+      const isDuplicate = mustVisitActualPlaces.some(mustPlace => 
+        mustPlace.name === place.name || 
+        (mustPlace.address === place.address && place.address !== '')
+      );
+      if (!isDuplicate) {
+        combinedPlaces.push(place);
+      }
+    });
+
+    // 4. 카테고리별로 분류
+    const categorizedPlaces = categorizePlacesByType(combinedPlaces);
     
-    // 2. 카테고리별로 분류
-    const categorizedPlaces = categorizePlacesByType(allPlaces);
-    
-    // 3. 각 날짜별로 최적화된 일정 생성
+    // 5. 각 날짜별로 최적화된 일정 생성
     const itinerary: { [day: number]: RecommendedPlace[] } = {};
     const usedPlaces = new Set<string>(); // 중복 방지용
     
@@ -416,7 +467,8 @@ export const generateOptimizedItinerary = async (
         usedPlaces, 
         preferences,
         destination,
-        day
+        day,
+        mustVisitActualPlaces // 필수 방문 장소 정보 전달
       );
       
       // 4. 이동시간을 고려한 경로 최적화 적용
@@ -666,33 +718,55 @@ const generateDayItinerary = (
   usedPlaces: Set<string>,
   preferences: string[],
   destination: string,
-  dayIndex: number
+  dayIndex: number,
+  mustVisitPlaces: RecommendedPlace[]
 ): RecommendedPlace[] => {
   const dayPlan: RecommendedPlace[] = [];
   
-  // 시간대별 계획
+  // 필수 방문 장소들을 날짜별로 배분 (균등 분할)
+  const totalDays = Math.max(1, Math.ceil(mustVisitPlaces.length / 2)); // 하루 최대 2개씩 배분
+  const mustVisitForToday = mustVisitPlaces
+    .filter((place, index) => 
+      Math.floor(index / 2) === dayIndex && !usedPlaces.has(place.id)
+    )
+    .slice(0, 2); // 하루 최대 2개 필수 방문 장소
+  
+  console.log(`${dayIndex + 1}일차 필수 방문 장소:`, mustVisitForToday.map(p => p.name));
+  
+  // 필수 방문 장소를 먼저 일정에 추가
+  dayPlan.push(...mustVisitForToday);
+  
+  // 시간대별 계획 (필수 방문 장소 개수만큼 줄여서 계획)
+  const remainingSlots = 8 - dayPlan.length;
   const timeSlots: Array<{ type: string; category: keyof ReturnType<typeof categorizePlacesByType>; count: number }> = [
-    { type: 'morning', category: 'attractions', count: 2 },
+    { type: 'morning', category: 'attractions', count: Math.max(1, Math.floor(remainingSlots * 0.25)) },
     { type: 'lunch', category: 'restaurants', count: 1 },
-    { type: 'afternoon1', category: 'culture', count: 1 },
-    { type: 'afternoon2', category: 'shopping', count: 1 },
+    { type: 'afternoon1', category: 'culture', count: Math.max(1, Math.floor(remainingSlots * 0.2)) },
+    { type: 'afternoon2', category: 'shopping', count: Math.max(1, Math.floor(remainingSlots * 0.15)) },
     { type: 'coffee', category: 'cafes', count: 1 },
     { type: 'dinner', category: 'restaurants', count: 1 },
-    { type: 'evening', category: 'nightlife', count: 1 }
+    { type: 'evening', category: 'nightlife', count: Math.max(0, Math.floor(remainingSlots * 0.1)) }
   ];
   
   timeSlots.forEach(slot => {
+    if (dayPlan.length >= 8) return; // 이미 8개가 차면 중단
+    
     const availablePlaces = categorizedPlaces[slot.category]
-      ?.filter((place: RecommendedPlace) => !usedPlaces.has(place.id))
+      ?.filter((place: RecommendedPlace) => 
+        !usedPlaces.has(place.id) && 
+        !dayPlan.some(p => p.id === place.id) // 이미 선택된 장소 제외
+      )
       ?.sort((a: RecommendedPlace, b: RecommendedPlace) => {
-        // 별점과 매칭 점수 종합
-        const scoreA = (a.rating || 0) * 20 + (a.matchScore || 0);
-        const scoreB = (b.rating || 0) * 20 + (b.matchScore || 0);
+        // 필수 방문 장소 우선 순위, 그 다음 별점과 매칭 점수
+        const priorityA = a.tags?.includes('필수방문') ? 1000 : 0;
+        const priorityB = b.tags?.includes('필수방문') ? 1000 : 0;
+        const scoreA = priorityA + (a.rating || 0) * 20 + (a.matchScore || 0);
+        const scoreB = priorityB + (b.rating || 0) * 20 + (b.matchScore || 0);
         return scoreB - scoreA;
       });
     
     if (availablePlaces && availablePlaces.length > 0) {
-      const selectedPlaces = availablePlaces.slice(0, slot.count);
+      const selectedPlaces = availablePlaces.slice(0, Math.min(slot.count, 8 - dayPlan.length));
       dayPlan.push(...selectedPlaces);
     }
   });
@@ -701,16 +775,24 @@ const generateDayItinerary = (
   if (dayPlan.length < 8) {
     const allAvailable = (Object.values(categorizedPlaces) as RecommendedPlace[][])
       .flat()
-      .filter((place: RecommendedPlace) => !usedPlaces.has(place.id) && !dayPlan.find(p => p.id === place.id))
+      .filter((place: RecommendedPlace) => 
+        !usedPlaces.has(place.id) && 
+        !dayPlan.find(p => p.id === place.id)
+      )
       .sort((a: RecommendedPlace, b: RecommendedPlace) => {
-        const scoreA = (a.rating || 0) * 20 + (a.matchScore || 0);
-        const scoreB = (b.rating || 0) * 20 + (b.matchScore || 0);
+        // 필수 방문 장소 우선 순위
+        const priorityA = a.tags?.includes('필수방문') ? 1000 : 0;
+        const priorityB = b.tags?.includes('필수방문') ? 1000 : 0;
+        const scoreA = priorityA + (a.rating || 0) * 20 + (a.matchScore || 0);
+        const scoreB = priorityB + (b.rating || 0) * 20 + (b.matchScore || 0);
         return scoreB - scoreA;
       });
     
     const needed = 8 - dayPlan.length;
     dayPlan.push(...allAvailable.slice(0, needed));
   }
+  
+  console.log(`${dayIndex + 1}일차 최종 일정 (${dayPlan.length}개):`, dayPlan.map(p => p.name));
   
   return dayPlan.slice(0, 8);
 };
