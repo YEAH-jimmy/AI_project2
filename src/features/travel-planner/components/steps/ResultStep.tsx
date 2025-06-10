@@ -24,7 +24,7 @@ import {
 } from 'lucide-react'
 import { KakaoMap } from '../KakaoMap'
 import { getPopularPlacesByRegion, RecommendedPlace, generateOptimizedItinerary } from '@/lib/place-recommendation'
-import { getValidatedTransportPoint } from '@/lib/kakao-map'
+import { getValidatedTransportPoint, calculateTravelTime } from '@/lib/kakao-map'
 
 // 샘플 여행지 데이터 (실제로는 AI가 생성)
 const sampleDestinations = [
@@ -1211,14 +1211,45 @@ export function ResultStep() {
                                       {itemIndex > 0 && (
                                         <div className="space-y-1">
                                           {(() => {
-                                            // 이동 거리 계산 (실제로는 위치 기반으로 계산해야 하지만, 예시를 위해 랜덤 값 사용)
-                                            const distance = Math.random() * 8 + 0.3; // 0.3km ~ 8.3km 사이
-                                            const walkingTime = Math.ceil(distance * 12); // 도보 시간 (분): 1km당 약 12분
-                                            const drivingTime = Math.max(5, Math.ceil(distance * 2.5)); // 차량 이동 시간 (분)
-                                            const bicycleTime = Math.ceil(distance * 4); // 자전거 시간 (분): 1km당 약 4분
-                                            const taxiCost = Math.ceil(3800 + (distance * 1000)); // 택시 기본요금 3800원 + 거리비용
-                                            const drivingCost = Math.ceil(distance * 500); // 자차 연료비 추정
-                                            const transitCost = distance > 10 ? 2150 : 1400; // 거리에 따른 대중교통 요금
+                                            // 실제 좌표 기반 이동시간 계산
+                                            const currentPlace = dayItinerary[itemIndex];
+                                            const previousPlace = dayItinerary[itemIndex - 1];
+                                            
+                                            // 기본값 (좌표 정보가 없는 경우)
+                                            let distance = 1.5;
+                                            let walkingTime = 18;
+                                            let drivingTime = 8;
+                                            let bicycleTime = 6;
+                                            let taxiCost = 4800;
+                                            let drivingCost = 750;
+                                            let transitCost = 1400;
+                                            
+                                            // 추천 장소에서 좌표 정보 활용 (optimizedItinerary 사용)
+                                            const optimizedDayPlaces = optimizedItinerary[dayIndex] || [];
+                                            
+                                            if (optimizedDayPlaces.length > itemIndex && optimizedDayPlaces.length > itemIndex - 1) {
+                                              const currentOptimizedPlace = optimizedDayPlaces[itemIndex];
+                                              const previousOptimizedPlace = optimizedDayPlaces[itemIndex - 1];
+                                              
+                                              if (currentOptimizedPlace && previousOptimizedPlace) {
+                                                const travelInfo = calculateTravelTime(
+                                                  previousOptimizedPlace.lat,
+                                                  previousOptimizedPlace.lng,
+                                                  currentOptimizedPlace.lat,
+                                                  currentOptimizedPlace.lng,
+                                                  selectedTransportType === 'driving' ? 'driving' : 
+                                                  selectedTransportType === 'walking' ? 'walking' : 'transit'
+                                                );
+                                                
+                                                distance = travelInfo.distanceKm;
+                                                drivingTime = travelInfo.durationMinutes;
+                                                walkingTime = Math.ceil((distance / 4) * 60); // 시속 4km
+                                                bicycleTime = Math.ceil((distance / 15) * 60); // 시속 15km
+                                                taxiCost = Math.ceil(3800 + (distance * 1000));
+                                                drivingCost = Math.ceil(distance * 500);
+                                                transitCost = distance > 10 ? 2150 : 1400;
+                                              }
+                                            }
                                             
                                             if (selectedTransportType === 'driving') {
                                               // 자동차/자차 선택시 → 자차 정보만 표시
