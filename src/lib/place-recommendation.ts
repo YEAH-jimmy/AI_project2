@@ -42,10 +42,6 @@ export interface RecommendedPlace {
   // 이동시간 관련 정보 추가
   travelTimeFromPrevious?: TravelTimeInfo
   suggestedVisitDuration?: number // 권장 방문 시간 (분)
-  // 일정 관련 정보 추가
-  scheduledTime?: string // 예정 시간 (예: '09:00')
-  activityType?: string // 활동 유형 (예: '아침 식당', '관광 명소')
-  orderIndex?: number // 순서 인덱스
   // 숙소 관련 정보 추가
   accommodationInfo?: {
     priceRange?: string
@@ -55,18 +51,16 @@ export interface RecommendedPlace {
   }
 }
 
-// 사용자 선호도 기반 카테고리 매핑 (InterestsStep의 값들과 일치)
+// 사용자 선호도 기반 카테고리 매핑
 const PREFERENCE_CATEGORY_MAP: { [key: string]: string[] } = {
-  'food': ['음식점', '맛집', '카페', '디저트', 'FD6', 'CE7'],
-  'nature': ['공원', '해수욕장', '산', '강', '자연', 'AT4'],
-  'culture': ['박물관', '미술관', '공연장', '문화재', '사찰', '궁궐', 'CT1', 'AC5'],
-  'shopping': ['쇼핑몰', '백화점', '시장', '아울렛', 'MT1', 'CS2'],
-  'photo': ['전망대', '포토스팟', '명소', '뷰포인트', 'AT4'],
-  'beach': ['해수욕장', '해변', '바다', '해안', 'AT4'],
-  'mountain': ['산', '등산', '하이킹', '케이블카', 'AT4'],
-  'art': ['미술관', '갤러리', '전시관', '아트센터', 'CT1'],
-  'cafe': ['카페', '디저트', '커피', 'CE7'],
-  'nightlife': ['바', '클럽', '야경', '야시장', 'AT4'],
+  '맛집': ['음식점', '카페', '디저트', 'FD6', 'CE7'],
+  '관광': ['관광명소', '박물관', '전시관', 'AT4', 'CT1'],
+  '쇼핑': ['쇼핑몰', '백화점', '시장', 'MT1', 'CS2'],
+  '자연': ['공원', '해수욕장', '산', '강', 'AT4'],
+  '문화': ['박물관', '미술관', '공연장', '문화재', 'CT1', 'AC5'],
+  '체험': ['체험관', '테마파크', '스포츠', 'AT4', 'AD5'],
+  '휴식': ['카페', '공원', '스파', '호텔', 'CE7', 'AT4'],
+  '야경': ['전망대', '다리', '타워', 'AT4'],
 }
 
 // 네이버 검색 API (클라이언트 사이드에서는 CORS 문제로 백엔드 필요)
@@ -171,7 +165,6 @@ export const searchIntegratedPlaces = async (
 // 선호도 기반 점수 계산
 const calculatePreferenceScore = (place: RecommendedPlace, preferences: string[]): number => {
   let score = 0
-  let matchDetails: string[] = []
   const placeCategory = place.category.toLowerCase()
   const placeTags = place.tags || []
   
@@ -182,7 +175,6 @@ const calculatePreferenceScore = (place: RecommendedPlace, preferences: string[]
     categories.forEach(category => {
       if (placeCategory.includes(category.toLowerCase())) {
         score += 10
-        matchDetails.push(`카테고리(${category}): +10`)
       }
     })
     
@@ -190,21 +182,14 @@ const calculatePreferenceScore = (place: RecommendedPlace, preferences: string[]
     placeTags.forEach(tag => {
       if (categories.some(cat => tag.toLowerCase().includes(cat.toLowerCase()))) {
         score += 5
-        matchDetails.push(`태그(${tag}): +5`)
       }
     })
     
     // 이름 매칭 점수
     if (place.name.toLowerCase().includes(preference.toLowerCase())) {
       score += 15
-      matchDetails.push(`이름(${preference}): +15`)
     }
   })
-  
-  // 높은 점수를 받은 장소만 로깅
-  if (score > 0) {
-    console.log(`🎯 [${place.name}] 관심사 매칭 점수: ${score}점`, matchDetails)
-  }
   
   return score
 }
@@ -240,46 +225,19 @@ export const getPopularPlacesByRegion = async (
   try {
     console.log('지역별 인기 장소 검색 시작:', { region, preferences, limit });
     
-    // 관심사 기반 우선 검색어 생성
-    let searchQueries: string[] = [];
-    
-    if (preferences && preferences.length > 0) {
-      console.log('사용자 관심사 기반 검색:', preferences);
-      
-      // 관심사별 구체적 검색어 매핑
-      const preferenceQueries: { [key: string]: string[] } = {
-        'food': [`${region} 맛집`, `${region} 음식점`, `${region} 현지음식`],
-        'nature': [`${region} 자연`, `${region} 공원`, `${region} 산책로`],
-        'culture': [`${region} 박물관`, `${region} 문화재`, `${region} 사찰`],
-        'shopping': [`${region} 쇼핑`, `${region} 시장`, `${region} 백화점`],
-        'photo': [`${region} 포토스팟`, `${region} 명소`, `${region} 뷰포인트`],
-        'beach': [`${region} 해수욕장`, `${region} 해변`, `${region} 바다`],
-        'mountain': [`${region} 산`, `${region} 등산`, `${region} 케이블카`],
-        'art': [`${region} 미술관`, `${region} 갤러리`, `${region} 전시관`],
-        'cafe': [`${region} 카페`, `${region} 디저트`, `${region} 커피`],
-        'nightlife': [`${region} 야경`, `${region} 야시장`, `${region} 바`],
-      };
-      
-      // 선택된 관심사 기반 검색어 우선 추가
-      preferences.forEach(preference => {
-        const queries = preferenceQueries[preference] || [];
-        searchQueries.push(...queries);
-      });
-    }
-    
-    // 기본 검색어 추가 (관심사가 없거나 추가 다양성을 위해)
-    const baseQueries = [
+    // 더 구체적이고 다양한 검색 쿼리
+    const searchQueries = [
+      `${region} 맛집`,
       `${region} 관광지`,
+      `${region} 카페`,
+      `${region} 쇼핑`,
+      `${region} 박물관`,
+      `${region} 공원`,
       `${region} 명소`,
       `${region} 체험`,
       // 지역별 특화 검색어 추가
       ...getRegionSpecificQueries(region)
     ];
-    
-    searchQueries.push(...baseQueries);
-    
-    // 중복 제거
-    searchQueries = [...new Set(searchQueries)];
     
     const allPlaces: RecommendedPlace[] = [];
     let successfulQueries = 0;
@@ -655,25 +613,18 @@ const generateDayItinerary = (
 ): RecommendedPlace[] => {
   const dayPlan: RecommendedPlace[] = [];
   
-  // 시간대별 계획 (사용자가 요청한 순서대로)
-  // 1. 숙소 체크아웃 2. 아침 식당 3. 관광 명소 4. 점심 식당 5. 카페 6. 관광 명소 7. 저녁 식당 8. 숙소 체크인
-  const timeSlots: Array<{ type: string; category: keyof ReturnType<typeof categorizePlacesByType>; count: number; time: string; description: string }> = [
-    { type: 'checkout', category: 'attractions', count: 0, time: '08:00', description: '숙소 체크아웃' }, // 체크아웃은 별도 처리
-    { type: 'breakfast', category: 'restaurants', count: 1, time: '09:00', description: '아침 식당' },
-    { type: 'morning-attraction', category: 'attractions', count: 1, time: '10:30', description: '관광 명소' },
-    { type: 'lunch', category: 'restaurants', count: 1, time: '12:30', description: '점심 식당' },
-    { type: 'cafe', category: 'cafes', count: 1, time: '14:30', description: '카페' },
-    { type: 'afternoon-attraction', category: 'attractions', count: 1, time: '16:00', description: '관광 명소' },
-    { type: 'dinner', category: 'restaurants', count: 1, time: '18:30', description: '저녁 식당' },
-    { type: 'checkin', category: 'attractions', count: 0, time: '20:00', description: '숙소 체크인' }  // 체크인은 별도 처리
+  // 시간대별 계획
+  const timeSlots: Array<{ type: string; category: keyof ReturnType<typeof categorizePlacesByType>; count: number }> = [
+    { type: 'morning', category: 'attractions', count: 2 },
+    { type: 'lunch', category: 'restaurants', count: 1 },
+    { type: 'afternoon1', category: 'culture', count: 1 },
+    { type: 'afternoon2', category: 'shopping', count: 1 },
+    { type: 'coffee', category: 'cafes', count: 1 },
+    { type: 'dinner', category: 'restaurants', count: 1 },
+    { type: 'evening', category: 'nightlife', count: 1 }
   ];
   
-  timeSlots.forEach((slot, index) => {
-    if (slot.count === 0) {
-      // 숙소 체크아웃/체크인은 별도 처리 (place-recommendation.ts의 recommendAccommodationNearLastPlace에서 처리)
-      return;
-    }
-    
+  timeSlots.forEach(slot => {
     const availablePlaces = categorizedPlaces[slot.category]
       ?.filter((place: RecommendedPlace) => !usedPlaces.has(place.id))
       ?.sort((a: RecommendedPlace, b: RecommendedPlace) => {
@@ -684,52 +635,27 @@ const generateDayItinerary = (
       });
     
     if (availablePlaces && availablePlaces.length > 0) {
-      const selectedPlaces = availablePlaces.slice(0, slot.count).map(place => ({
-        ...place,
-        // 시간 정보 추가
-        scheduledTime: slot.time,
-        activityType: slot.description,
-        orderIndex: index
-      }));
+      const selectedPlaces = availablePlaces.slice(0, slot.count);
       dayPlan.push(...selectedPlaces);
-      
-      // 사용된 장소들을 Set에 추가
-      selectedPlaces.forEach(place => usedPlaces.add(place.id));
-      
-      console.log(`📅 ${slot.time} - ${slot.description}: ${selectedPlaces.map(p => p.name).join(', ')}`);
     }
   });
   
-  // 6개 장소가 목표 (체크아웃, 체크인 제외)
-  // 부족하면 관광명소로 보충하되 순서 유지
-  if (dayPlan.length < 6) {
-    const attractionsForFill = categorizedPlaces.attractions
-      ?.filter((place: RecommendedPlace) => !usedPlaces.has(place.id))
-      ?.sort((a: RecommendedPlace, b: RecommendedPlace) => {
+  // 8개 장소로 맞추기 (부족하면 다른 카테고리에서 보충)
+  if (dayPlan.length < 8) {
+    const allAvailable = (Object.values(categorizedPlaces) as RecommendedPlace[][])
+      .flat()
+      .filter((place: RecommendedPlace) => !usedPlaces.has(place.id) && !dayPlan.find(p => p.id === place.id))
+      .sort((a: RecommendedPlace, b: RecommendedPlace) => {
         const scoreA = (a.rating || 0) * 20 + (a.matchScore || 0);
         const scoreB = (b.rating || 0) * 20 + (b.matchScore || 0);
         return scoreB - scoreA;
       });
     
-    const needed = 6 - dayPlan.length;
-    if (attractionsForFill && attractionsForFill.length > 0) {
-      const fillPlaces = attractionsForFill.slice(0, needed).map((place, index) => ({
-        ...place,
-        scheduledTime: `1${5 + index}:00`, // 15:00부터 시작
-        activityType: '추가 관광 명소',
-        orderIndex: 100 + index // 마지막에 추가
-      }));
-      dayPlan.push(...fillPlaces);
-      console.log(`📍 부족한 장소 보충: ${fillPlaces.map(p => p.name).join(', ')}`);
-    }
+    const needed = 8 - dayPlan.length;
+    dayPlan.push(...allAvailable.slice(0, needed));
   }
   
-  // 순서대로 정렬 (orderIndex 기준)
-  const sortedPlan = dayPlan.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
-  
-  console.log('📋 일정 순서 확인:', sortedPlan.map(p => `${p.scheduledTime} ${p.activityType}: ${p.name}`));
-  
-  return sortedPlan.slice(0, 6); // 최대 6개
+  return dayPlan.slice(0, 8);
 };
 
 // 이동시간을 고려한 하루 경로 최적화
