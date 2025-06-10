@@ -460,8 +460,8 @@ export const generateOptimizedItinerary = async (
         }
       }
       
-      // 5. 숙소 체크인 추가 (예약한 숙소가 있으면 우선 사용)
-      if (optimizedDayPlaces.length > 0) {
+      // 5. 숙소 체크인 추가 (마지막 날 제외, 예약한 숙소가 있으면 우선 사용)
+      if (optimizedDayPlaces.length > 0 && day < days - 1) { // 마지막 날이 아닌 경우에만
         const lastPlace = optimizedDayPlaces[optimizedDayPlaces.length - 1];
         
         if (bookedAccommodation) {
@@ -592,6 +592,9 @@ export const generateOptimizedItinerary = async (
             optimizedDayPlaces.push(errorCheckIn);
           }
         }
+      } else if (day === days - 1) {
+        // 마지막 날인 경우 체크인 생략
+        console.log(`${day + 1}일차 (마지막 날): 숙소 체크인 생략 - 집으로 돌아가는 날`);
       }
       
       itinerary[day] = optimizedDayPlaces;
