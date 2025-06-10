@@ -813,7 +813,7 @@ export function ResultStep() {
                                   isOptimized: true // 최적화된 일정임을 표시
                                 }));
                                 
-                                // 첫날과 마지막날 교통편 및 숙소 조정
+                                // 첫날과 마지막날 교통편 조정 (숙소는 이미 추천 시스템에서 추가됨)
                                 if (transportPoint) {
                                   if (isFirstDay) {
                                     // 첫날: 교통편 도착 맨 앞에 추가
@@ -829,35 +829,7 @@ export function ResultStep() {
                                       phone: '',
                                       isOptimized: true
                                     });
-                                    
-                                    // 첫날: 숙소 체크인 맨 마지막에 추가
-                                    itinerary.push({
-                                      time: '20:00',
-                                      activity: '숙소 체크인',
-                                      location: `${planData.destination} 숙소`,
-                                      type: 'accommodation',
-                                      description: '호텔/펜션 체크인 및 휴식',
-                                      rating: 0,
-                                      reviewCount: 0,
-                                      matchScore: 0,
-                                      phone: '',
-                                      isOptimized: true
-                                    });
                                   } else if (isLastDay) {
-                                    // 마지막날: 숙소 체크아웃 맨 앞에 추가
-                                    itinerary.unshift({
-                                      time: '09:00',
-                                      activity: '숙소 체크아웃',
-                                      location: `${planData.destination} 숙소`,
-                                      type: 'accommodation',
-                                      description: '호텔/펜션 체크아웃',
-                                      rating: 0,
-                                      reviewCount: 0,
-                                      matchScore: 0,
-                                      phone: '',
-                                      isOptimized: true
-                                    });
-                                    
                                     // 마지막날: 교통편 출발 맨 마지막에 추가
                                     itinerary.push({
                                       time: '18:00',
@@ -871,72 +843,11 @@ export function ResultStep() {
                                       phone: '',
                                       isOptimized: true
                                     });
-                                  } else {
-                                    // 중간날: 숙소 체크아웃 맨 앞, 체크인 맨 마지막
-                                    itinerary.unshift({
-                                      time: '09:00',
-                                      activity: '숙소 체크아웃',
-                                      location: `${planData.destination} 숙소`,
-                                      type: 'accommodation',
-                                      description: '호텔/펜션 체크아웃',
-                                      rating: 0,
-                                      reviewCount: 0,
-                                      matchScore: 0,
-                                      phone: '',
-                                      isOptimized: true
-                                    });
-                                    
-                                    itinerary.push({
-                                      time: '20:00',
-                                      activity: '숙소 체크인',
-                                      location: `${planData.destination} 숙소`,
-                                      type: 'accommodation',
-                                      description: '호텔/펜션 체크인 및 휴식',
-                                      rating: 0,
-                                      reviewCount: 0,
-                                      matchScore: 0,
-                                      phone: '',
-                                      isOptimized: true
-                                    });
                                   }
-                                } else {
-                                  // 교통편 정보가 없는 경우에도 숙소 배치
-                                  if (isFirstDay) {
-                                    itinerary.push({
-                                      time: '20:00',
-                                      activity: '숙소 체크인',
-                                      location: `${planData.destination} 숙소`,
-                                      type: 'accommodation',
-                                      description: '호텔/펜션 체크인 및 휴식',
-                                      rating: 0,
-                                      reviewCount: 0,
-                                      matchScore: 0,
-                                      phone: '',
-                                      isOptimized: true
-                                    });
-                                  } else if (isLastDay) {
-                                    itinerary.unshift({
-                                      time: '09:00',
-                                      activity: '숙소 체크아웃',
-                                      location: `${planData.destination} 숙소`,
-                                      type: 'accommodation',
-                                      description: '호텔/펜션 체크아웃',
-                                      rating: 0,
-                                      reviewCount: 0,
-                                      matchScore: 0,
-                                      phone: '',
-                                      isOptimized: true
-                                    });
-                                  } else {
-                                    itinerary.unshift({
-                                      time: '09:00',
-                                      activity: '숙소 체크아웃',
-                                      location: `${planData.destination} 숙소`,
-                                      type: 'accommodation',
-                                      description: '호텔/펜션 체크아웃',
-                                      rating: 0,
-                                      reviewCount: 0,
-                                      matchScore: 0,
+                                }
+                                
+                                // 주의: 숙소 체크인/체크아웃은 place-recommendation.ts에서 자동으로 추가되므로 
+                                // 여기서는 추가하지 않음 (중복 방지)
                                       phone: '',
                                       isOptimized: true
                                     });
@@ -992,7 +903,7 @@ export function ResultStep() {
                                     phone: place.phone
                                   }));
                                   
-                                  // 추천 장소 일정에도 교통편 및 숙소 추가
+                                  // 추천 장소 일정에도 교통편 추가 (숙소는 이미 추천 시스템에서 추가됨)
                                   if (transportPoint) {
                                     if (isFirstDay) {
                                       itinerary.unshift({
@@ -1006,31 +917,7 @@ export function ResultStep() {
                                         matchScore: 0,
                                         phone: ''
                                       });
-                                      
-                                      itinerary.push({
-                                        time: '20:00',
-                                        activity: '숙소 체크인',
-                                        location: `${planData.destination} 숙소`,
-                                        type: 'accommodation',
-                                        description: '호텔/펜션 체크인 및 휴식',
-                                        rating: 0,
-                                        reviewCount: 0,
-                                        matchScore: 0,
-                                        phone: ''
-                                      });
                                     } else if (isLastDay) {
-                                      itinerary.unshift({
-                                        time: '09:00',
-                                        activity: '숙소 체크아웃',
-                                        location: `${planData.destination} 숙소`,
-                                        type: 'accommodation',
-                                        description: '호텔/펜션 체크아웃',
-                                        rating: 0,
-                                        reviewCount: 0,
-                                        matchScore: 0,
-                                        phone: ''
-                                      });
-                                      
                                       itinerary.push({
                                         time: '18:00',
                                         activity: `${transportPoint} 출발`,
@@ -1042,82 +929,11 @@ export function ResultStep() {
                                         matchScore: 0,
                                         phone: ''
                                       });
-                                    } else {
-                                      itinerary.unshift({
-                                        time: '09:00',
-                                        activity: '숙소 체크아웃',
-                                        location: `${planData.destination} 숙소`,
-                                        type: 'accommodation',
-                                        description: '호텔/펜션 체크아웃',
-                                        rating: 0,
-                                        reviewCount: 0,
-                                        matchScore: 0,
-                                        phone: ''
-                                      });
-                                      
-                                      itinerary.push({
-                                        time: '20:00',
-                                        activity: '숙소 체크인',
-                                        location: `${planData.destination} 숙소`,
-                                        type: 'accommodation',
-                                        description: '호텔/펜션 체크인 및 휴식',
-                                        rating: 0,
-                                        reviewCount: 0,
-                                        matchScore: 0,
-                                        phone: ''
-                                      });
-                                    }
-                                  } else {
-                                    if (isFirstDay) {
-                                      itinerary.push({
-                                        time: '20:00',
-                                        activity: '숙소 체크인',
-                                        location: `${planData.destination} 숙소`,
-                                        type: 'accommodation',
-                                        description: '호텔/펜션 체크인 및 휴식',
-                                        rating: 0,
-                                        reviewCount: 0,
-                                        matchScore: 0,
-                                        phone: ''
-                                      });
-                                    } else if (isLastDay) {
-                                      itinerary.unshift({
-                                        time: '09:00',
-                                        activity: '숙소 체크아웃',
-                                        location: `${planData.destination} 숙소`,
-                                        type: 'accommodation',
-                                        description: '호텔/펜션 체크아웃',
-                                        rating: 0,
-                                        reviewCount: 0,
-                                        matchScore: 0,
-                                        phone: ''
-                                      });
-                                    } else {
-                                      itinerary.unshift({
-                                        time: '09:00',
-                                        activity: '숙소 체크아웃',
-                                        location: `${planData.destination} 숙소`,
-                                        type: 'accommodation',
-                                        description: '호텔/펜션 체크아웃',
-                                        rating: 0,
-                                        reviewCount: 0,
-                                        matchScore: 0,
-                                        phone: ''
-                                      });
-                                      
-                                      itinerary.push({
-                                        time: '20:00',
-                                        activity: '숙소 체크인',
-                                        location: `${planData.destination} 숙소`,
-                                        type: 'accommodation',
-                                        description: '호텔/펜션 체크인 및 휴식',
-                                        rating: 0,
-                                        reviewCount: 0,
-                                        matchScore: 0,
-                                        phone: ''
-                                      });
                                     }
                                   }
+                                  
+                                  // 주의: 숙소 체크인/체크아웃은 place-recommendation.ts에서 자동으로 추가되므로 
+                                  // 여기서는 추가하지 않음 (중복 방지)
                                   
                                   return itinerary;
                                 }

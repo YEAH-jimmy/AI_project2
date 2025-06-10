@@ -370,9 +370,7 @@ export function AccommodationStep() {
                             {accommodation.reviewCount && (
                               <span>리뷰 {accommodation.reviewCount}개</span>
                             )}
-                            {accommodation.distance && (
-                              <span>거리 {accommodation.distance.toFixed(1)}km</span>
-                            )}
+                            {/* 거리는 아직 일정이 확정되지 않았으므로 표시하지 않음 */}
                           </div>
                           
                           {accommodation.priceRange && (
