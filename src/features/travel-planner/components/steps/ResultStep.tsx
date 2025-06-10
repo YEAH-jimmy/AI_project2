@@ -848,24 +848,6 @@ export function ResultStep() {
                                 
                                 // 주의: 숙소 체크인/체크아웃은 place-recommendation.ts에서 자동으로 추가되므로 
                                 // 여기서는 추가하지 않음 (중복 방지)
-                                      phone: '',
-                                      isOptimized: true
-                                    });
-                                    
-                                    itinerary.push({
-                                      time: '20:00',
-                                      activity: '숙소 체크인',
-                                      location: `${planData.destination} 숙소`,
-                                      type: 'accommodation',
-                                      description: '호텔/펜션 체크인 및 휴식',
-                                      rating: 0,
-                                      reviewCount: 0,
-                                      matchScore: 0,
-                                      phone: '',
-                                      isOptimized: true
-                                    });
-                                  }
-                                }
                                 
                                 return itinerary;
                               }
