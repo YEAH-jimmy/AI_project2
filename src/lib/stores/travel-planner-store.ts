@@ -124,12 +124,22 @@ export const useTravelPlannerStore = create<TravelPlannerState>()(
           console.log('Updated plan data:', get().planData);
         },
         
-        resetPlanData: () => 
+        resetPlanData: () => {
+          console.log('🔄 여행 계획 데이터 완전 초기화')
           set({ 
-            planData: initialPlanData, 
+            planData: { ...initialPlanData }, 
             currentStep: 1,
-            generatedItinerary: undefined
-          }),
+            generatedItinerary: undefined,
+            isGenerating: false
+          })
+          
+          // 로컬 스토리지도 클리어하여 완전 초기화
+          try {
+            localStorage.removeItem('travel-planner-storage')
+          } catch (error) {
+            console.warn('로컬 스토리지 클리어 실패:', error)
+          }
+        },
         
         setGeneratedItinerary: (itinerary) => 
           set({ generatedItinerary: itinerary }),

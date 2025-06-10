@@ -287,9 +287,10 @@ export function ResultStep() {
   }
 
   const handleStartOver = () => {
-    resetPlanData();
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('travel-planner-storage');
+    if (window.confirm('새로운 여행을 계획하시겠습니까? 현재 일정이 모두 삭제됩니다.')) {
+      resetPlanData();
+      // 홈페이지로 이동
+      window.location.href = '/';
     }
   }
 

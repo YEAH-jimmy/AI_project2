@@ -12,16 +12,44 @@ import { ResultStep } from './steps/ResultStep'
 import { Button } from '@/components/ui/button'
 import { RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 
 export function TravelPlannerWizard() {
-  const { currentStep, setCurrentStep } = useTravelPlannerStore()
+  const { currentStep, setCurrentStep, resetPlanData, updatePlanData } = useTravelPlannerStore()
   const [loading, setLoading] = useState(false)
   const [isHydrated, setIsHydrated] = useState(false)
+  const searchParams = useSearchParams()
   
   // hydration 완료 후에만 실제 상태 표시
   useEffect(() => {
     setIsHydrated(true)
   }, [])
+
+  // URL 파라미터로 추천 여행지가 전달된 경우 처리
+  useEffect(() => {
+    if (isHydrated) {
+      const destination = searchParams.get('destination')
+      const reset = searchParams.get('reset')
+      
+      if (reset === 'true') {
+        console.log('🔄 완전히 새로 시작')
+        resetPlanData()
+        // URL 파라미터 제거
+        window.history.replaceState({}, '', '/planner')
+      } else if (destination) {
+        console.log(`🎯 추천 여행지 선택됨: ${destination}`)
+        // 상태를 완전히 초기화한 후 여행지 설정
+        resetPlanData()
+        // 약간의 딜레이 후 여행지 설정 (초기화가 완료된 후)
+        setTimeout(() => {
+          updatePlanData({ destination })
+          setCurrentStep(2) // 여행지 선택 단계로 이동
+          // URL에서 destination 파라미터 제거
+          window.history.replaceState({}, '', '/planner')
+        }, 100)
+      }
+    }
+  }, [isHydrated, searchParams, resetPlanData, updatePlanData, setCurrentStep])
   
   // hydration이 완료되지 않았으면 첫 번째 단계로 표시
   const displayStep = isHydrated ? currentStep : 1
@@ -47,7 +75,10 @@ export function TravelPlannerWizard() {
 
   const handleReset = () => {
     if (window.confirm('모든 입력 정보가 초기화됩니다. 계속하시겠습니까?')) {
+      resetPlanData()
       setCurrentStep(1)
+      // URL 파라미터도 제거
+      window.history.replaceState({}, '', '/planner')
     }
   }
 

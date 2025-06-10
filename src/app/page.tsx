@@ -99,7 +99,7 @@ export default function HomePage() {
               </div>
             </div>
             <div>
-              <Link href="/planner">
+              <Link href="/planner?reset=true">
                 <Button variant={isScrolled ? "default" : "outline"} className={isScrolled ? "" : "border-white text-white bg-white/10 backdrop-blur-sm hover:bg-white hover:text-blue-600"}>
                   여행 계획 시작하기
                 </Button>
@@ -136,7 +136,7 @@ export default function HomePage() {
               더 이상 복잡한 여행 계획에 시간을 낭비하지 마세요.
             </p>
             <div className="space-x-4">
-              <Link href="/planner">
+              <Link href="/planner?reset=true">
                 <Button size="lg" className="text-lg px-8 py-6 bg-blue-600 hover:bg-blue-700">
                   무료로 시작하기
                 </Button>
@@ -352,7 +352,7 @@ export default function HomePage() {
           </div>
           
           <div className="text-center mt-16">
-            <Link href="/planner">
+            <Link href="/planner?reset=true">
               <Button size="lg" className="text-lg px-8 py-6">
                 지금 바로 시작하기
                 <ArrowRight className="ml-2 w-5 h-5" />
@@ -412,7 +412,7 @@ export default function HomePage() {
             무료로 이용할 수 있으며, 몇 분 안에 완벽한 여행 일정이 완성됩니다.
             더 이상 여행 계획으로 고민하지 마세요.
           </p>
-          <Link href="/planner">
+          <Link href="/planner?reset=true">
             <Button size="lg" variant="secondary" className="text-lg px-10 py-6 bg-white text-blue-700 hover:bg-blue-50">
               무료로 시작하기
               <ArrowRight className="ml-2 w-5 h-5" />
