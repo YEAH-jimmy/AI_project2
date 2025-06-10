@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { KakaoMap } from '../KakaoMap'
 import { getPopularPlacesByRegion, RecommendedPlace, generateOptimizedItinerary } from '@/lib/place-recommendation'
+import { getValidatedTransportPoint } from '@/lib/kakao-map'
 
 // 샘플 여행지 데이터 (실제로는 AI가 생성)
 const sampleDestinations = [
@@ -134,6 +135,7 @@ export function ResultStep() {
   const [placeSearchError, setPlaceSearchError] = useState<string | null>(null)
   const [selectedTransportType, setSelectedTransportType] = useState<ResultTransportType>(() => mapPlanTransportToResultType(planData.localTransport))
   const [isTransportMenuOpen, setIsTransportMenuOpen] = useState(false)
+  const [validatedTransportPoint, setValidatedTransportPoint] = useState<string | null>(null)
 
   // 드롭다운 외부 클릭시 닫기
   useEffect(() => {
@@ -152,6 +154,29 @@ export function ResultStep() {
       document.removeEventListener('click', handleClickOutside);
     };
   }, [isTransportMenuOpen]);
+
+  // 교통시설 미리 검증
+  useEffect(() => {
+    const validateTransport = async () => {
+      if (planData.destination && planData.destinationTransport && 
+          ['airplane', 'ktx', 'train', 'bus'].includes(planData.destinationTransport)) {
+        try {
+          const point = await getValidatedTransportPoint(
+            planData.destination, 
+            planData.destinationTransport as 'airplane' | 'ktx' | 'train' | 'bus'
+          );
+          setValidatedTransportPoint(point);
+        } catch (error) {
+          console.error('교통시설 사전 검증 실패:', error);
+          setValidatedTransportPoint(null);
+        }
+      } else {
+        setValidatedTransportPoint(null);
+      }
+    };
+
+    validateTransport();
+  }, [planData.destination, planData.destinationTransport]);
 
   const mapCenter = useMemo(() => {
     const destinations: { [key: string]: { lat: number; lng: number } } = {
@@ -423,19 +448,32 @@ export function ResultStep() {
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="text-gray-700">여행지까지:</span>
-                <span className="font-medium text-gray-900">
-                  {(() => {
-                    const destinationTransportLabels: { [key: string]: string } = {
-                      'airplane': '비행기',
-                      'ktx': 'KTX', 
-                      'train': '일반열차',
-                      'bus': '시외버스',
-                      'car': '자가용',
-                      'other': '기타'
-                    };
-                    return destinationTransportLabels[planData.destinationTransport || 'airplane'] || '비행기';
-                  })()}
-                </span>
+                <div className="text-right">
+                  <span className="font-medium text-gray-900">
+                    {(() => {
+                      const destinationTransportLabels: { [key: string]: string } = {
+                        'airplane': '비행기',
+                        'ktx': 'KTX', 
+                        'train': '일반열차',
+                        'bus': '시외버스',
+                        'car': '자가용',
+                        'other': '기타'
+                      };
+                      return destinationTransportLabels[planData.destinationTransport || 'airplane'] || '비행기';
+                    })()}
+                  </span>
+                  {validatedTransportPoint && (
+                    <div className="text-xs text-green-600 mt-1">
+                      ✅ {validatedTransportPoint}
+                    </div>
+                  )}
+                  {!validatedTransportPoint && planData.destinationTransport && 
+                   ['airplane', 'ktx', 'train', 'bus'].includes(planData.destinationTransport) && (
+                    <div className="text-xs text-orange-600 mt-1">
+                      ⚠️ 해당 교통시설 없음
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-700">현지 이동:</span>
@@ -603,52 +641,35 @@ export function ResultStep() {
                             
                             // 여행지별 구체적인 일정 데이터
                             const getSpecificItinerary = (destination: string, day: number) => {
-                              // 교통수단에 따른 시작/끝 지점 설정
-                              const getTransportPoints = (transport: string | undefined, destination: string) => {
-                                const destinationAirports: { [key: string]: string } = {
-                                  '제주도': '제주국제공항',
-                                  '부산': '김해국제공항', 
-                                  '대구': '대구국제공항',
-                                  '여수': '여수공항',
-                                  '울산': '울산공항'
+                              // 검증된 교통시설 정보를 가져오는 함수
+                              const getTransportPoints = async (transport: string | undefined, destination: string): Promise<string | null> => {
+                                if (transport === 'car' || transport === 'other') {
+                                  return null; // 자가용이나 기타는 특별한 시작/끝점 없음
+                                }
+                                
+                                const transportTypeMap: { [key: string]: 'airplane' | 'ktx' | 'train' | 'bus' } = {
+                                  'airplane': 'airplane',
+                                  'ktx': 'ktx',
+                                  'train': 'train',
+                                  'bus': 'bus'
                                 };
                                 
-                                const destinationStations: { [key: string]: string } = {
-                                  '부산': '부산역',
-                                  '대구': '동대구역',
-                                  '광주': '광주송정역',
-                                  '전주': '전주역',
-                                  '경주': '신경주역',
-                                  '강릉': '강릉역',
-                                  '속초': '속초버스터미널',
-                                  '여수': '여수엑스포역'
-                                };
+                                const transportType = transportTypeMap[transport || 'airplane'];
+                                if (!transportType) return null;
                                 
-                                const destinationTerminals: { [key: string]: string } = {
-                                  '속초': '속초시외버스터미널',
-                                  '강릉': '강릉시외버스터미널',
-                                  '전주': '전주시외버스터미널',
-                                  '경주': '경주시외버스터미널',
-                                  '가평': '가평버스터미널',
-                                  '여수': '여수종합버스터미널'
-                                };
-                                
-                                switch (transport) {
-                                  case 'airplane':
-                                    return destinationAirports[destination] || `${destination}공항`;
-                                  case 'ktx':
-                                  case 'train':
-                                    return destinationStations[destination] || `${destination}역`;
-                                  case 'bus':
-                                    return destinationTerminals[destination] || `${destination}터미널`;
-                                  case 'car':
-                                    return null; // 자가용은 특별한 시작/끝점 없음
-                                  default:
-                                    return destinationAirports[destination] || `${destination}공항`;
+                                try {
+                                  // 실제 존재하는 교통시설만 반환
+                                  const validatedPoint = await getValidatedTransportPoint(destination, transportType);
+                                  return validatedPoint;
+                                } catch (error) {
+                                  console.error('교통시설 검증 오류:', error);
+                                  // API 오류 시에도 잘못된 정보는 표시하지 않음
+                                  return null;
                                 }
                               };
                               
-                              const transportPoint = getTransportPoints(planData.destinationTransport, destination);
+                              // 미리 검증된 교통시설 사용
+                              const transportPoint = validatedTransportPoint;
                               const isFirstDay = day === 0;
                               const isLastDay = day === dayCount - 1;
                               

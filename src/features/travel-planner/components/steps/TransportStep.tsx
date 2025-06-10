@@ -7,7 +7,9 @@ import { useTravelPlannerStore } from '@/lib/stores/travel-planner-store'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Car, Train, Bus, Plane, ArrowRight, ArrowLeft, MapPin } from 'lucide-react'
+import { Car, Train, Bus, Plane, ArrowRight, ArrowLeft, MapPin, AlertTriangle, CheckCircle, Info } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { validateTransportFacility, TransportValidationResult } from '@/lib/kakao-map'
 
 const transportSchema = z.object({
   destinationTransport: z.enum(['airplane', 'ktx', 'train', 'bus', 'car', 'other']),
@@ -35,6 +37,8 @@ const localOptions = [
 
 export function TransportStep() {
   const { planData, updatePlanData, setCurrentStep } = useTravelPlannerStore()
+  const [validationResult, setValidationResult] = useState<TransportValidationResult | null>(null)
+  const [isValidating, setIsValidating] = useState(false)
   
   const {
     setValue,
@@ -53,6 +57,33 @@ export function TransportStep() {
   const destinationValue = watch('destinationTransport')
   const localValue = watch('localTransport')
 
+  // 교통수단 변경 시 검증 실행
+  useEffect(() => {
+    if (planData.destination && ['airplane', 'ktx', 'train', 'bus'].includes(destinationValue)) {
+      performValidation(destinationValue as 'airplane' | 'ktx' | 'train' | 'bus')
+    } else {
+      setValidationResult(null)
+    }
+  }, [destinationValue, planData.destination])
+
+  const performValidation = async (transportType: 'airplane' | 'ktx' | 'train' | 'bus') => {
+    if (!planData.destination) return
+    
+    setIsValidating(true)
+    try {
+      const result = await validateTransportFacility(planData.destination, transportType)
+      setValidationResult(result)
+    } catch (error) {
+      console.error('교통시설 검증 실패:', error)
+      setValidationResult({
+        isValid: false,
+        message: '교통시설 검증 중 오류가 발생했습니다.'
+      })
+    } finally {
+      setIsValidating(false)
+    }
+  }
+
   const onSubmit = (data: TransportFormData) => {
     updatePlanData({
       destinationTransport: data.destinationTransport,
@@ -63,6 +94,20 @@ export function TransportStep() {
 
   const handlePrevious = () => {
     setCurrentStep(3)
+  }
+
+  const getValidationIcon = () => {
+    if (isValidating) return <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+    if (!validationResult) return null
+    if (validationResult.isValid) return <CheckCircle className="w-4 h-4 text-green-500" />
+    return <AlertTriangle className="w-4 h-4 text-orange-500" />
+  }
+
+  const getValidationColor = () => {
+    if (isValidating) return 'border-blue-200 bg-blue-50'
+    if (!validationResult) return ''
+    if (validationResult.isValid) return 'border-green-200 bg-green-50'
+    return 'border-orange-200 bg-orange-50'
   }
 
   return (
@@ -124,6 +169,49 @@ export function TransportStep() {
                 )
               })}
             </div>
+
+            {/* 교통시설 검증 결과 */}
+            {planData.destination && ['airplane', 'ktx', 'train', 'bus'].includes(destinationValue) && (
+              <div className={`mt-4 p-4 rounded-lg border transition-all ${getValidationColor()}`}>
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5">
+                    {getValidationIcon()}
+                  </div>
+                  <div className="flex-1">
+                    {isValidating ? (
+                      <p className="text-sm text-blue-700">
+                        {planData.destination}의 교통시설을 확인하는 중...
+                      </p>
+                    ) : validationResult ? (
+                      <div className="space-y-2">
+                        <p className={`text-sm font-medium ${
+                          validationResult.isValid ? 'text-green-700' : 'text-orange-700'
+                        }`}>
+                          {validationResult.message}
+                        </p>
+                        
+                        {validationResult.facility && (
+                          <p className="text-xs text-green-600">
+                            📍 {validationResult.facility.address}
+                          </p>
+                        )}
+                        
+                        {validationResult.alternatives && validationResult.alternatives.length > 0 && (
+                          <div className="space-y-1">
+                            <p className="text-xs text-gray-600 font-medium">💡 추천 대안:</p>
+                            {validationResult.alternatives.slice(0, 2).map((alt, index) => (
+                              <p key={index} className="text-xs text-gray-600">
+                                • {alt.name} ({alt.distance ? `${alt.distance.toFixed(0)}km` : '근처'})
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -194,9 +282,9 @@ export function TransportStep() {
                 </div>
               </div>
 
-              <div className="flex justify-between">
-                <Button 
-                  type="button" 
+              <div className="flex justify-between pt-6">
+                <Button
+                  type="button"
                   variant="outline"
                   onClick={handlePrevious}
                   className="flex items-center gap-2"
@@ -204,9 +292,10 @@ export function TransportStep() {
                   <ArrowLeft className="w-4 h-4" />
                   이전 단계
                 </Button>
-                
-                <Button 
+
+                <Button
                   type="submit"
+                  disabled={!isValid}
                   className="flex items-center gap-2"
                 >
                   다음 단계

@@ -672,4 +672,173 @@ export const formatTravelTime = (minutes: number): string => {
 // 이동비용 포맷팅 함수
 export const formatTravelCost = (cost: number): string => {
   return `${cost.toLocaleString()}원`;
+};
+
+// 교통시설 검증 및 대안 제안 기능
+export interface TransportFacility {
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  exists: boolean;
+  distance?: number; // km
+}
+
+export interface TransportValidationResult {
+  isValid: boolean;
+  facility?: TransportFacility;
+  alternatives?: TransportFacility[];
+  message: string;
+}
+
+// 교통수단별 검색 키워드 매핑
+const TRANSPORT_KEYWORDS = {
+  airplane: ['공항', '항공'],
+  ktx: ['KTX', 'ktx역', '고속철도'],
+  train: ['역', '기차역', '철도역'],
+  bus: ['터미널', '버스터미널', '시외버스']
+};
+
+// 교통시설 존재 여부 검증
+export const validateTransportFacility = async (
+  destination: string,
+  transportType: 'airplane' | 'ktx' | 'train' | 'bus'
+): Promise<TransportValidationResult> => {
+  try {
+    const keywords = TRANSPORT_KEYWORDS[transportType];
+    const searchQuery = `${destination} ${keywords[0]}`;
+    
+    console.log(`🔍 교통시설 검증: ${searchQuery}`);
+    
+    // 카카오 API로 해당 교통시설 검색
+    const searchResults = await searchPlaces(searchQuery);
+    
+    // 검색 결과 필터링 (더 정확한 매칭)
+    const validFacilities = searchResults.filter(place => {
+      const placeName = place.place_name.toLowerCase();
+      const address = place.address_name.toLowerCase();
+      const destinationLower = destination.toLowerCase();
+      
+      // 목적지 이름이 포함되어야 함
+      const hasDestination = placeName.includes(destinationLower) || address.includes(destinationLower);
+      
+      // 교통시설 키워드가 포함되어야 함
+      const hasTransportKeyword = keywords.some(keyword => 
+        placeName.includes(keyword.toLowerCase())
+      );
+      
+      return hasDestination && hasTransportKeyword;
+    });
+    
+    if (validFacilities.length > 0) {
+      // 가장 적합한 시설 선택 (첫 번째 결과)
+      const facility = validFacilities[0];
+      return {
+        isValid: true,
+        facility: {
+          name: facility.place_name,
+          address: facility.address_name,
+          lat: parseFloat(facility.y),
+          lng: parseFloat(facility.x),
+          exists: true
+        },
+        message: `✅ ${facility.place_name}을(를) 이용할 수 있습니다.`
+      };
+    } else {
+      // 해당 교통시설이 없는 경우 대안 검색
+      const alternatives = await findAlternativeTransport(destination, transportType);
+      
+      return {
+        isValid: false,
+        alternatives,
+        message: `❌ ${destination}에는 ${getTransportTypeName(transportType)}이(가) 없습니다.`
+      };
+    }
+  } catch (error) {
+    console.error('교통시설 검증 오류:', error);
+    return {
+      isValid: false,
+      message: '교통시설 정보를 확인할 수 없습니다. 다시 시도해주세요.'
+    };
+  }
+};
+
+// 대안 교통시설 검색
+const findAlternativeTransport = async (
+  destination: string,
+  originalTransportType: 'airplane' | 'ktx' | 'train' | 'bus'
+): Promise<TransportFacility[]> => {
+  try {
+    const alternatives: TransportFacility[] = [];
+    
+    // 목적지 좌표 얻기
+    const destinationCoords = await getCoordinatesByAddress(destination);
+    if (!destinationCoords) return alternatives;
+    
+    // 다른 교통수단들 검색
+    const alternativeTypes = ['airplane', 'ktx', 'train', 'bus'].filter(
+      type => type !== originalTransportType
+    ) as Array<'airplane' | 'ktx' | 'train' | 'bus'>;
+    
+    for (const transportType of alternativeTypes) {
+      const keywords = TRANSPORT_KEYWORDS[transportType];
+      
+      // 반경 50km 내에서 검색
+      const searchResults = await searchPlaces(keywords[0]);
+      
+      const nearbyFacilities = searchResults
+        .map(place => {
+          const distance = calculateDistance(
+            destinationCoords.lat,
+            destinationCoords.lng,
+            parseFloat(place.y),
+            parseFloat(place.x)
+          );
+          
+          return {
+            name: place.place_name,
+            address: place.address_name,
+            lat: parseFloat(place.y),
+            lng: parseFloat(place.x),
+            exists: true,
+            distance
+          };
+        })
+        .filter(facility => facility.distance <= 100) // 100km 이내
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 2); // 가장 가까운 2개만
+      
+      alternatives.push(...nearbyFacilities);
+    }
+    
+    return alternatives.slice(0, 3); // 최대 3개 대안
+  } catch (error) {
+    console.error('대안 교통시설 검색 오류:', error);
+    return [];
+  }
+};
+
+// 교통수단 타입 이름 변환
+const getTransportTypeName = (transportType: string): string => {
+  const names: { [key: string]: string } = {
+    airplane: '공항',
+    ktx: 'KTX역',
+    train: '기차역',
+    bus: '버스터미널'
+  };
+  return names[transportType] || transportType;
+};
+
+// 검증된 교통시설 정보 가져오기
+export const getValidatedTransportPoint = async (
+  destination: string,
+  transportType: 'airplane' | 'ktx' | 'train' | 'bus'
+): Promise<string | null> => {
+  const validation = await validateTransportFacility(destination, transportType);
+  
+  if (validation.isValid && validation.facility) {
+    return validation.facility.name;
+  }
+  
+  return null;
 }; 
