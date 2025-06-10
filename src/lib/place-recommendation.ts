@@ -51,16 +51,18 @@ export interface RecommendedPlace {
   }
 }
 
-// 사용자 선호도 기반 카테고리 매핑
+// 사용자 선호도 기반 카테고리 매핑 (InterestsStep의 값들과 일치)
 const PREFERENCE_CATEGORY_MAP: { [key: string]: string[] } = {
-  '맛집': ['음식점', '카페', '디저트', 'FD6', 'CE7'],
-  '관광': ['관광명소', '박물관', '전시관', 'AT4', 'CT1'],
-  '쇼핑': ['쇼핑몰', '백화점', '시장', 'MT1', 'CS2'],
-  '자연': ['공원', '해수욕장', '산', '강', 'AT4'],
-  '문화': ['박물관', '미술관', '공연장', '문화재', 'CT1', 'AC5'],
-  '체험': ['체험관', '테마파크', '스포츠', 'AT4', 'AD5'],
-  '휴식': ['카페', '공원', '스파', '호텔', 'CE7', 'AT4'],
-  '야경': ['전망대', '다리', '타워', 'AT4'],
+  'food': ['음식점', '맛집', '카페', '디저트', 'FD6', 'CE7'],
+  'nature': ['공원', '해수욕장', '산', '강', '자연', 'AT4'],
+  'culture': ['박물관', '미술관', '공연장', '문화재', '사찰', '궁궐', 'CT1', 'AC5'],
+  'shopping': ['쇼핑몰', '백화점', '시장', '아울렛', 'MT1', 'CS2'],
+  'photo': ['전망대', '포토스팟', '명소', '뷰포인트', 'AT4'],
+  'beach': ['해수욕장', '해변', '바다', '해안', 'AT4'],
+  'mountain': ['산', '등산', '하이킹', '케이블카', 'AT4'],
+  'art': ['미술관', '갤러리', '전시관', '아트센터', 'CT1'],
+  'cafe': ['카페', '디저트', '커피', 'CE7'],
+  'nightlife': ['바', '클럽', '야경', '야시장', 'AT4'],
 }
 
 // 네이버 검색 API (클라이언트 사이드에서는 CORS 문제로 백엔드 필요)
@@ -165,6 +167,7 @@ export const searchIntegratedPlaces = async (
 // 선호도 기반 점수 계산
 const calculatePreferenceScore = (place: RecommendedPlace, preferences: string[]): number => {
   let score = 0
+  let matchDetails: string[] = []
   const placeCategory = place.category.toLowerCase()
   const placeTags = place.tags || []
   
@@ -175,6 +178,7 @@ const calculatePreferenceScore = (place: RecommendedPlace, preferences: string[]
     categories.forEach(category => {
       if (placeCategory.includes(category.toLowerCase())) {
         score += 10
+        matchDetails.push(`카테고리(${category}): +10`)
       }
     })
     
@@ -182,14 +186,21 @@ const calculatePreferenceScore = (place: RecommendedPlace, preferences: string[]
     placeTags.forEach(tag => {
       if (categories.some(cat => tag.toLowerCase().includes(cat.toLowerCase()))) {
         score += 5
+        matchDetails.push(`태그(${tag}): +5`)
       }
     })
     
     // 이름 매칭 점수
     if (place.name.toLowerCase().includes(preference.toLowerCase())) {
       score += 15
+      matchDetails.push(`이름(${preference}): +15`)
     }
   })
+  
+  // 높은 점수를 받은 장소만 로깅
+  if (score > 0) {
+    console.log(`🎯 [${place.name}] 관심사 매칭 점수: ${score}점`, matchDetails)
+  }
   
   return score
 }
@@ -225,19 +236,46 @@ export const getPopularPlacesByRegion = async (
   try {
     console.log('지역별 인기 장소 검색 시작:', { region, preferences, limit });
     
-    // 더 구체적이고 다양한 검색 쿼리
-    const searchQueries = [
-      `${region} 맛집`,
+    // 관심사 기반 우선 검색어 생성
+    let searchQueries: string[] = [];
+    
+    if (preferences && preferences.length > 0) {
+      console.log('사용자 관심사 기반 검색:', preferences);
+      
+      // 관심사별 구체적 검색어 매핑
+      const preferenceQueries: { [key: string]: string[] } = {
+        'food': [`${region} 맛집`, `${region} 음식점`, `${region} 현지음식`],
+        'nature': [`${region} 자연`, `${region} 공원`, `${region} 산책로`],
+        'culture': [`${region} 박물관`, `${region} 문화재`, `${region} 사찰`],
+        'shopping': [`${region} 쇼핑`, `${region} 시장`, `${region} 백화점`],
+        'photo': [`${region} 포토스팟`, `${region} 명소`, `${region} 뷰포인트`],
+        'beach': [`${region} 해수욕장`, `${region} 해변`, `${region} 바다`],
+        'mountain': [`${region} 산`, `${region} 등산`, `${region} 케이블카`],
+        'art': [`${region} 미술관`, `${region} 갤러리`, `${region} 전시관`],
+        'cafe': [`${region} 카페`, `${region} 디저트`, `${region} 커피`],
+        'nightlife': [`${region} 야경`, `${region} 야시장`, `${region} 바`],
+      };
+      
+      // 선택된 관심사 기반 검색어 우선 추가
+      preferences.forEach(preference => {
+        const queries = preferenceQueries[preference] || [];
+        searchQueries.push(...queries);
+      });
+    }
+    
+    // 기본 검색어 추가 (관심사가 없거나 추가 다양성을 위해)
+    const baseQueries = [
       `${region} 관광지`,
-      `${region} 카페`,
-      `${region} 쇼핑`,
-      `${region} 박물관`,
-      `${region} 공원`,
       `${region} 명소`,
       `${region} 체험`,
       // 지역별 특화 검색어 추가
       ...getRegionSpecificQueries(region)
     ];
+    
+    searchQueries.push(...baseQueries);
+    
+    // 중복 제거
+    searchQueries = [...new Set(searchQueries)];
     
     const allPlaces: RecommendedPlace[] = [];
     let successfulQueries = 0;
