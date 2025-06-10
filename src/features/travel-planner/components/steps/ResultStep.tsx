@@ -178,11 +178,13 @@ export function ResultStep() {
     validateTransport();
   }, [planData.destination, planData.destinationTransport]);
 
-  // 추천 장소들의 분포에 따른 적절한 줌 레벨 계산
-  const calculateOptimalZoomLevel = (places: Array<{ lat: number; lng: number }>) => {
-    if (places.length <= 1) return 8; // 장소가 1개 이하면 기본 줌
+  // 모든 마커를 포함하는 최적 지도 범위 계산
+  const calculateOptimalMapBounds = (places: Array<{ lat: number; lng: number }>) => {
+    if (places.length <= 1) {
+      return { level: 8, center: places[0] || { lat: 37.5665, lng: 126.9780 } };
+    }
     
-    // 위도와 경도의 최대/최소값 계산
+    // 모든 마커의 경계 계산
     const lats = places.map(p => p.lat);
     const lngs = places.map(p => p.lng);
     const minLat = Math.min(...lats);
@@ -190,36 +192,57 @@ export function ResultStep() {
     const minLng = Math.min(...lngs);
     const maxLng = Math.max(...lngs);
     
-    // 위도, 경도 범위 계산
-    const latRange = maxLat - minLat;
-    const lngRange = maxLng - minLng;
+    // 경계에 여백 추가 (10% 패딩)
+    const latPadding = (maxLat - minLat) * 0.15; // 15% 여백으로 증가
+    const lngPadding = (maxLng - minLng) * 0.15;
+    
+    const paddedMinLat = minLat - latPadding;
+    const paddedMaxLat = maxLat + latPadding;
+    const paddedMinLng = minLng - lngPadding;
+    const paddedMaxLng = maxLng + lngPadding;
+    
+    // 중심점 계산
+    const centerLat = (paddedMinLat + paddedMaxLat) / 2;
+    const centerLng = (paddedMinLng + paddedMaxLng) / 2;
+    
+    // 경계 범위 계산
+    const latRange = paddedMaxLat - paddedMinLat;
+    const lngRange = paddedMaxLng - paddedMinLng;
     const maxRange = Math.max(latRange, lngRange);
     
-    // 범위에 따른 줌 레벨 결정 (카카오맵 level은 1~14, 작을수록 확대)
-    if (maxRange > 1.0) return 10;      // 매우 넓은 범위
-    if (maxRange > 0.5) return 8;       // 넓은 범위  
-    if (maxRange > 0.2) return 6;       // 중간 범위
-    if (maxRange > 0.1) return 5;       // 좁은 범위
-    if (maxRange > 0.05) return 4;      // 매우 좁은 범위
-    return 3;                           // 매우 가까운 장소들
+    // 모든 마커가 보이도록 충분히 축소된 줌 레벨 설정
+    let level;
+    if (maxRange > 0.5) level = 12;       // 매우 넓은 범위 → 많이 축소
+    else if (maxRange > 0.3) level = 11;  // 넓은 범위
+    else if (maxRange > 0.15) level = 10; // 중간 범위  
+    else if (maxRange > 0.08) level = 9;  // 좁은 범위
+    else if (maxRange > 0.04) level = 8;  // 매우 좁은 범위
+    else if (maxRange > 0.02) level = 7;  // 근거리
+    else level = 6;                       // 매우 가까운 장소들
+    
+    console.log(`지도 범위 최적화: 범위=${maxRange.toFixed(4)}, 레벨=${level}, 중심=(${centerLat.toFixed(4)}, ${centerLng.toFixed(4)})`);
+    
+    return {
+      level,
+      center: { lat: centerLat, lng: centerLng }
+    };
   };
 
-  const mapCenter = useMemo(() => {
-    // 1. 추천 장소들이 있으면 그 중심점 계산
+  // 모든 마커를 포함하는 최적 지도 설정 계산
+  const mapSettings = useMemo(() => {
+    // 1. 추천 장소들이 있으면 모든 마커를 포함하는 범위 계산
     const allPlaces = Object.values(optimizedItinerary).flat();
     if (allPlaces.length > 0) {
-      const avgLat = allPlaces.reduce((sum, place) => sum + place.lat, 0) / allPlaces.length;
-      const avgLng = allPlaces.reduce((sum, place) => sum + place.lng, 0) / allPlaces.length;
-      console.log(`지도 중심을 추천 장소 기준으로 이동: lat=${avgLat.toFixed(4)}, lng=${avgLng.toFixed(4)}`);
-      return { lat: avgLat, lng: avgLng };
+      const bounds = calculateOptimalMapBounds(allPlaces);
+      console.log(`지도를 모든 추천 장소를 포함하도록 조정: 레벨=${bounds.level}`);
+      return bounds;
     }
     
     // 2. 기본 추천 장소들이 있으면 사용
     if (recommendedPlaces.length > 0) {
-      const avgLat = recommendedPlaces.reduce((sum, place) => sum + place.lat, 0) / recommendedPlaces.length;
-      const avgLng = recommendedPlaces.reduce((sum, place) => sum + place.lng, 0) / recommendedPlaces.length;
-      console.log(`지도 중심을 추천 장소 기준으로 이동: lat=${avgLat.toFixed(4)}, lng=${avgLng.toFixed(4)}`);
-      return { lat: avgLat, lng: avgLng };
+      const bounds = calculateOptimalMapBounds(recommendedPlaces);
+      console.log(`지도를 모든 추천 장소를 포함하도록 조정: 레벨=${bounds.level}`);
+      return bounds;
     }
     
     // 3. 추천 장소가 없으면 기본 도시 중심점 사용
@@ -234,26 +257,13 @@ export function ResultStep() {
       '가평': { lat: 37.8314, lng: 127.5109 },
     }
     
-    return destinations[planData.destination || ''] || { lat: 37.5665, lng: 126.9780 }
+    const defaultCenter = destinations[planData.destination || ''] || { lat: 37.5665, lng: 126.9780 };
+    return { level: 8, center: defaultCenter };
   }, [planData.destination, optimizedItinerary, recommendedPlaces]);
 
-  // 추천 장소 기반 적절한 줌 레벨 계산
-  const mapLevel = useMemo(() => {
-    const allPlaces = Object.values(optimizedItinerary).flat();
-    if (allPlaces.length > 0) {
-      const level = calculateOptimalZoomLevel(allPlaces);
-      console.log(`지도 줌 레벨을 추천 장소 기준으로 조정: level=${level}`);
-      return level;
-    }
-    
-    if (recommendedPlaces.length > 0) {
-      const level = calculateOptimalZoomLevel(recommendedPlaces);
-      console.log(`지도 줌 레벨을 추천 장소 기준으로 조정: level=${level}`);
-      return level;
-    }
-    
-    return 5; // 기본 줌 레벨
-  }, [optimizedItinerary, recommendedPlaces]);
+  // 개별적으로 center와 level 추출
+  const mapCenter = mapSettings.center;
+  const mapLevel = mapSettings.level;
 
   const mapMarkers = useMemo(() => {
     // 최적화된 일정이 있으면 날짜별로 순서가 있는 마커 생성
