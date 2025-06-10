@@ -178,7 +178,51 @@ export function ResultStep() {
     validateTransport();
   }, [planData.destination, planData.destinationTransport]);
 
+  // 추천 장소들의 분포에 따른 적절한 줌 레벨 계산
+  const calculateOptimalZoomLevel = (places: Array<{ lat: number; lng: number }>) => {
+    if (places.length <= 1) return 8; // 장소가 1개 이하면 기본 줌
+    
+    // 위도와 경도의 최대/최소값 계산
+    const lats = places.map(p => p.lat);
+    const lngs = places.map(p => p.lng);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    
+    // 위도, 경도 범위 계산
+    const latRange = maxLat - minLat;
+    const lngRange = maxLng - minLng;
+    const maxRange = Math.max(latRange, lngRange);
+    
+    // 범위에 따른 줌 레벨 결정 (카카오맵 level은 1~14, 작을수록 확대)
+    if (maxRange > 1.0) return 10;      // 매우 넓은 범위
+    if (maxRange > 0.5) return 8;       // 넓은 범위  
+    if (maxRange > 0.2) return 6;       // 중간 범위
+    if (maxRange > 0.1) return 5;       // 좁은 범위
+    if (maxRange > 0.05) return 4;      // 매우 좁은 범위
+    return 3;                           // 매우 가까운 장소들
+  };
+
   const mapCenter = useMemo(() => {
+    // 1. 추천 장소들이 있으면 그 중심점 계산
+    const allPlaces = Object.values(optimizedItinerary).flat();
+    if (allPlaces.length > 0) {
+      const avgLat = allPlaces.reduce((sum, place) => sum + place.lat, 0) / allPlaces.length;
+      const avgLng = allPlaces.reduce((sum, place) => sum + place.lng, 0) / allPlaces.length;
+      console.log(`지도 중심을 추천 장소 기준으로 이동: lat=${avgLat.toFixed(4)}, lng=${avgLng.toFixed(4)}`);
+      return { lat: avgLat, lng: avgLng };
+    }
+    
+    // 2. 기본 추천 장소들이 있으면 사용
+    if (recommendedPlaces.length > 0) {
+      const avgLat = recommendedPlaces.reduce((sum, place) => sum + place.lat, 0) / recommendedPlaces.length;
+      const avgLng = recommendedPlaces.reduce((sum, place) => sum + place.lng, 0) / recommendedPlaces.length;
+      console.log(`지도 중심을 추천 장소 기준으로 이동: lat=${avgLat.toFixed(4)}, lng=${avgLng.toFixed(4)}`);
+      return { lat: avgLat, lng: avgLng };
+    }
+    
+    // 3. 추천 장소가 없으면 기본 도시 중심점 사용
     const destinations: { [key: string]: { lat: number; lng: number } } = {
       '제주도': { lat: 33.4996, lng: 126.5312 },
       '부산': { lat: 35.1796, lng: 129.0756 },
@@ -191,7 +235,25 @@ export function ResultStep() {
     }
     
     return destinations[planData.destination || ''] || { lat: 37.5665, lng: 126.9780 }
-  }, [planData.destination]);
+  }, [planData.destination, optimizedItinerary, recommendedPlaces]);
+
+  // 추천 장소 기반 적절한 줌 레벨 계산
+  const mapLevel = useMemo(() => {
+    const allPlaces = Object.values(optimizedItinerary).flat();
+    if (allPlaces.length > 0) {
+      const level = calculateOptimalZoomLevel(allPlaces);
+      console.log(`지도 줌 레벨을 추천 장소 기준으로 조정: level=${level}`);
+      return level;
+    }
+    
+    if (recommendedPlaces.length > 0) {
+      const level = calculateOptimalZoomLevel(recommendedPlaces);
+      console.log(`지도 줌 레벨을 추천 장소 기준으로 조정: level=${level}`);
+      return level;
+    }
+    
+    return 5; // 기본 줌 레벨
+  }, [optimizedItinerary, recommendedPlaces]);
 
   const mapMarkers = useMemo(() => {
     // 최적화된 일정이 있으면 날짜별로 순서가 있는 마커 생성
@@ -284,6 +346,7 @@ export function ResultStep() {
           setRecommendedPlaces(allPlaces);
           
           console.log('최적화된 일정 생성 완료:', days, '일간', allPlaces.length, '개 장소');
+          console.log('지도가 추천 장소들을 중심으로 자동 이동합니다.');
           setPlaceSearchError(null);
         } catch (error) {
           console.error('장소 추천 오류:', error)
@@ -1436,7 +1499,7 @@ export function ResultStep() {
                     center={mapCenter}
                     markers={mapMarkers}
                     height="100%"
-                    level={5}
+                    level={mapLevel}
                     className="w-full h-full"
                   />
                   <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm rounded px-3 py-2 shadow-lg">
