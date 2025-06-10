@@ -331,14 +331,30 @@ export function ResultStep() {
             ? Math.ceil((new Date(planData.endDate).getTime() - new Date(planData.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1
             : 1;
           
+          console.log('계산된 여행 일수:', days)
+          
+          // 기본 시작 위치 계산 (순환 의존성 방지)
+          const destinations: { [key: string]: { lat: number; lng: number } } = {
+            '제주도': { lat: 33.4996, lng: 126.5312 },
+            '부산': { lat: 35.1796, lng: 129.0756 },
+            '경주': { lat: 35.8562, lng: 129.2247 },
+            '강릉': { lat: 37.7519, lng: 128.8761 },
+            '여수': { lat: 34.7604, lng: 127.6622 },
+            '전주': { lat: 35.8242, lng: 127.1480 },
+            '속초': { lat: 38.2070, lng: 128.5918 },
+            '가평': { lat: 37.8314, lng: 127.5109 },
+          }
+          const startLocation = destinations[planData.destination] || { lat: 37.5665, lng: 126.9780 };
+          
           // 최적화된 일정 생성
           const itinerary = await generateOptimizedItinerary(
             planData.destination,
             planData.interests,
             days,
-            mapCenter // 시작 위치로 지도 중심점 사용
+            startLocation
           );
           
+          console.log('생성된 일정:', itinerary)
           setOptimizedItinerary(itinerary);
           
           // 모든 추천 장소들을 평면화해서 저장 (지도 표시용)
@@ -357,18 +373,27 @@ export function ResultStep() {
           setOptimizedItinerary({})
         }
         setLoadingPlaces(false)
+      } else {
+        console.log('필수 정보 누락:', { destination: planData.destination, interests: planData.interests })
+        setPlaceSearchError('여행지 또는 관심사 정보가 없습니다.')
       }
     }
     
     // 3초 후 완료
     const timer = setTimeout(async () => {
-      await generateRecommendations()
-      setIsGenerating(false)
-      setGenerationComplete(true)
+      try {
+        await generateRecommendations()
+      } catch (error) {
+        console.error('일정 생성 전체 오류:', error)
+        setPlaceSearchError('일정 생성 중 예기치 않은 오류가 발생했습니다.')
+      } finally {
+        setIsGenerating(false)
+        setGenerationComplete(true)
+      }
     }, 3000)
 
     return () => clearTimeout(timer)
-  }, [setIsGenerating, planData.destination, planData.interests, planData.startDate, planData.endDate, mapCenter])
+  }, [setIsGenerating, planData.destination, planData.interests, planData.startDate, planData.endDate])
 
   const handlePrevious = () => {
     setCurrentStep(7) // 필수 방문 장소 단계로 돌아가기
