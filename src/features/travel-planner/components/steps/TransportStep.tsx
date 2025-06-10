@@ -84,7 +84,26 @@ export function TransportStep() {
     }
   }
 
+  // 다음 단계 진행 가능 여부 확인
+  const canProceed = () => {
+    // 폼이 유효하지 않으면 진행 불가
+    if (!isValid) return false
+    
+    // 교통시설 검증이 필요한 교통수단인 경우
+    if (['airplane', 'ktx', 'train', 'bus'].includes(destinationValue)) {
+      // 검증 중이거나, 검증 결과가 없거나, 검증 실패시 진행 불가
+      if (isValidating || !validationResult || !validationResult.isValid) {
+        return false
+      }
+    }
+    
+    return true
+  }
+
   const onSubmit = (data: TransportFormData) => {
+    // 진행 가능한 상태일 때만 다음 단계로
+    if (!canProceed()) return
+    
     updatePlanData({
       destinationTransport: data.destinationTransport,
       localTransport: data.localTransport,
@@ -295,13 +314,28 @@ export function TransportStep() {
 
                 <Button
                   type="submit"
-                  disabled={!isValid}
+                  disabled={!canProceed()}
                   className="flex items-center gap-2"
                 >
                   다음 단계
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </div>
+              
+              {/* 진행 불가 사유 안내 */}
+              {!canProceed() && (
+                <div className="text-center pt-2">
+                  <p className="text-sm text-orange-600">
+                    {isValidating ? (
+                      '교통시설 확인 중입니다...'
+                    ) : validationResult && !validationResult.isValid ? (
+                      '선택한 교통수단이 이용 불가능합니다. 다른 교통수단을 선택해주세요.'
+                    ) : (
+                      '모든 항목을 선택해주세요.'
+                    )}
+                  </p>
+                </div>
+              )}
             </form>
           </CardContent>
         </Card>
