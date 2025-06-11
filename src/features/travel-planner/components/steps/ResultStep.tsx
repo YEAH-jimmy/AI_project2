@@ -306,7 +306,7 @@ export function ResultStep() {
             lat: place.lat,
             lng: place.lng,
             name: `${day + 1}일차 ${index + 1}번: ${icon}${place.name.replace('🏨 ', '').replace('🛄 ', '')}`,
-            description: `⭐ ${place.rating || 'N/A'} (${place.reviewCount || 0}명) | ${place.category}`,
+            description: `${place.rating && place.rating > 0 ? `⭐ ${place.rating}` : ''}${place.reviewCount && place.reviewCount > 0 ? ` (${place.reviewCount}명)` : ''} | ${place.category}`,
             order: index + 1,
             day: day + 1
           });
@@ -327,7 +327,7 @@ export function ResultStep() {
         lat: place.lat,
         lng: place.lng,
         name: place.name,
-        description: `⭐ ${place.rating || 'N/A'} (${place.reviewCount || 0}명) | ${place.category}`
+        description: `${place.rating && place.rating > 0 ? `⭐ ${place.rating}` : ''}${place.reviewCount && place.reviewCount > 0 ? ` (${place.reviewCount}명)` : ''} | ${place.category}`
       }));
     }
     
@@ -1433,11 +1433,11 @@ export function ResultStep() {
                                              
                                              {/* 평점 및 추가 정보 */}
                                              <div className="flex items-center gap-3 flex-wrap">
-                                               {item.rating && (
+                                               {item.rating && item.rating > 0 && (
                                                  <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-full">
                                                    <Star className="w-3 h-3 text-yellow-500 fill-current" />
                                                    <span className="text-xs text-yellow-700 font-medium">{item.rating}</span>
-                                                   {item.reviewCount && (
+                                                   {item.reviewCount && item.reviewCount > 0 && (
                                                      <span className="text-xs text-yellow-600">({item.reviewCount})</span>
                                                    )}
                                                  </div>
@@ -1458,7 +1458,7 @@ export function ResultStep() {
                                              </div>
                                              
                                              {/* 높은 평점 특별 표시 */}
-                                             {item.rating && item.rating >= 4.5 && (
+                                             {item.rating && item.rating > 0 && item.rating >= 4.5 && (
                                                <div className="mt-2 text-xs text-green-600 font-medium bg-green-50 rounded p-2">
                                                  🌟 높은 평점의 추천 장소입니다! ({item.rating}점)
                                                </div>
