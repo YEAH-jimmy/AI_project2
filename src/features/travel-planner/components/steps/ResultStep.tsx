@@ -1518,17 +1518,9 @@ export function ResultStep() {
                       </div>
                       <div>
                         <h4 className="text-lg font-medium text-gray-600 mb-2">지도가 숨겨져 있습니다</h4>
-                        <p className="text-sm text-gray-500 mb-4">
-                          '지도 보기' 버튼을 클릭하면 여행 경로를 지도에서 확인할 수 있습니다.
+                        <p className="text-sm text-gray-500">
+                          상단의 '지도 보기' 버튼을 클릭하면 여행 경로를 지도에서 확인할 수 있습니다.
                         </p>
-                        <Button 
-                          variant="outline" 
-                          onClick={() => setShowMap(true)}
-                          className="flex items-center gap-2"
-                        >
-                          <Map className="w-4 h-4" />
-                          지도 보기
-                        </Button>
                       </div>
                     </div>
                   </div>
