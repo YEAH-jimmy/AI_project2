@@ -731,6 +731,21 @@ const CITIES_WITHOUT_FACILITIES = {
   ]
 };
 
+// 실제 KTX역 목록 (일부)
+const ACTUAL_KTX_STATIONS = [
+  '서울역', '용산역', '광명역', '천안아산역', '오송역', '대전역', '김천구미역', '동대구역', '신경주역', '울산역', '부산역',
+  '익산역', '정읍역', '광주송정역', '목포역', '전주역', '순천역', '여수엑스포역',
+  '평창역', '진부역', '강릉역', '동해역',
+  '수서역', '지제역', '만종역', '강동역', '영주역', '봉화역', '춘양역', '안동역'
+];
+
+// 실제 일반열차역 목록 (주요역들)
+const ACTUAL_TRAIN_STATIONS = [
+  '서울역', '용산역', '영등포역', '안양역', '수원역', '평택역', '천안역', '조치원역', '대전역', '영동역', '김천역', '구미역', '대구역', '동대구역', '경주역', '울산역', '부산역', '부전역',
+  '익산역', '정읍역', '광주역', '목포역', '전주역', '순천역', '여수역',
+  '청량리역', '원주역', '제천역', '단양역', '영주역', '안동역', '태백역', '동해역', '강릉역'
+];
+
 // 교통시설 존재 여부 검증
 export const validateTransportFacility = async (
   destination: string,
@@ -792,7 +807,57 @@ export const validateTransportFacility = async (
                  !placeName.includes('도로') && 
                  !placeName.includes('아파트') &&
                  !placeName.includes('마트') &&
-                 !placeName.includes('병원');
+                 !placeName.includes('병원') &&
+                 !placeName.includes('주차장') &&
+                 !placeName.includes('카페') &&
+                 !placeName.includes('식당');
+        } else if (transportType === 'ktx') {
+          // KTX의 경우 역이 포함되어야 하고 부적절한 시설은 제외
+          const isValidStation = (placeName.includes('역') || placeName.includes('KTX')) &&
+                 !placeName.includes('아파트') &&
+                 !placeName.includes('마트') &&
+                 !placeName.includes('병원') &&
+                 !placeName.includes('주차장') &&
+                 !placeName.includes('카페') &&
+                 !placeName.includes('식당') &&
+                 !placeName.includes('빌딩') &&
+                 !placeName.includes('오피스텔') &&
+                 !placeName.includes('펜션') &&
+                 !placeName.includes('호텔') &&
+                 !placeName.includes('모텔');
+          
+          // 실제 KTX역 목록과 비교
+          const matchesActualStation = ACTUAL_KTX_STATIONS.some(station => 
+            placeName.includes(station.toLowerCase()) || 
+            (destinationLower === '전주' && placeName.includes('전주역'))
+          );
+          
+          return isValidStation && matchesActualStation;
+        } else if (transportType === 'train') {
+          // 일반열차의 경우
+          const isValidStation = placeName.includes('역') &&
+                 !placeName.includes('아파트') &&
+                 !placeName.includes('마트') &&
+                 !placeName.includes('병원') &&
+                 !placeName.includes('주차장') &&
+                 !placeName.includes('카페') &&
+                 !placeName.includes('식당');
+          
+          // 실제 기차역 목록과 비교
+          const matchesActualStation = ACTUAL_TRAIN_STATIONS.some(station => 
+            placeName.includes(station.toLowerCase())
+          );
+          
+          return isValidStation && matchesActualStation;
+        } else if (transportType === 'bus') {
+          // 버스터미널의 경우
+          return placeName.includes('터미널') &&
+                 !placeName.includes('아파트') &&
+                 !placeName.includes('마트') &&
+                 !placeName.includes('병원') &&
+                 !placeName.includes('주차장') &&
+                 !placeName.includes('카페') &&
+                 !placeName.includes('식당');
         }
         return true;
       })();
