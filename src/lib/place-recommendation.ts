@@ -49,6 +49,11 @@ export interface RecommendedPlace {
     distance?: number
     alternativeOptions?: AccommodationInfo[]
   }
+  // 일정 형식 개선을 위한 추가 필드
+  timeSlot?: 'early_morning' | 'morning' | 'lunch' | 'afternoon' | 'evening' | 'night'
+  activityType?: 'accommodation' | 'dining' | 'attraction' | 'culture' | 'shopping' | 'transport' | 'must_visit'
+  scheduledTime?: string // 추천 시간 (HH:mm 형식)
+  orderIndex?: number // 하루 일정 내 순서
 }
 
 // 사용자 선호도 기반 카테고리 매핑
@@ -733,45 +738,144 @@ const generateDayItinerary = (
   
   console.log(`${dayIndex + 1}일차 필수 방문 장소:`, mustVisitForToday.map(p => p.name));
   
-  // 필수 방문 장소를 먼저 일정에 추가
-  dayPlan.push(...mustVisitForToday);
-  
-  // 시간대별 계획 (필수 방문 장소 개수만큼 줄여서 계획)
-  const remainingSlots = 8 - dayPlan.length;
-  const timeSlots: Array<{ type: string; category: keyof ReturnType<typeof categorizePlacesByType>; count: number }> = [
-    { type: 'morning', category: 'attractions', count: Math.max(1, Math.floor(remainingSlots * 0.25)) },
-    { type: 'lunch', category: 'restaurants', count: 1 },
-    { type: 'afternoon1', category: 'culture', count: Math.max(1, Math.floor(remainingSlots * 0.2)) },
-    { type: 'afternoon2', category: 'shopping', count: Math.max(1, Math.floor(remainingSlots * 0.15)) },
-    { type: 'coffee', category: 'cafes', count: 1 },
-    { type: 'dinner', category: 'restaurants', count: 1 },
-    { type: 'evening', category: 'nightlife', count: Math.max(0, Math.floor(remainingSlots * 0.1)) }
+  // 시간대별 일정 템플릿 정의
+  const scheduleTemplate = [
+    { 
+      timeSlot: 'early_morning' as const, 
+      time: '08:30', 
+      categories: ['restaurants'], 
+      count: 1, 
+      activityType: 'dining' as const,
+      purpose: '아침 식사'
+    },
+    { 
+      timeSlot: 'morning' as const, 
+      time: '10:00', 
+      categories: ['attractions'], 
+      count: 2, 
+      activityType: 'attraction' as const,
+      purpose: '오전 관광'
+    },
+    { 
+      timeSlot: 'lunch' as const, 
+      time: '12:30', 
+      categories: ['restaurants'], 
+      count: 1, 
+      activityType: 'dining' as const,
+      purpose: '점심 식사'
+    },
+    { 
+      timeSlot: 'afternoon' as const, 
+      time: '14:30', 
+      categories: ['culture', 'shopping', 'attractions'], 
+      count: 2, 
+      activityType: 'culture' as const,
+      purpose: '오후 활동'
+    },
+    { 
+      timeSlot: 'afternoon' as const, 
+      time: '16:30', 
+      categories: ['cafes'], 
+      count: 1, 
+      activityType: 'dining' as const,
+      purpose: '카페 타임'
+    },
+    { 
+      timeSlot: 'evening' as const, 
+      time: '18:30', 
+      categories: ['restaurants'], 
+      count: 1, 
+      activityType: 'dining' as const,
+      purpose: '저녁 식사'
+    },
+    { 
+      timeSlot: 'night' as const, 
+      time: '20:30', 
+      categories: ['nightlife', 'attractions'], 
+      count: 1, 
+      activityType: 'attraction' as const,
+      purpose: '야간 활동'
+    }
   ];
-  
-  timeSlots.forEach(slot => {
-    if (dayPlan.length >= 8) return; // 이미 8개가 차면 중단
+
+  let orderIndex = 0;
+
+  // 필수 방문 장소를 적절한 시간대에 배치
+  mustVisitForToday.forEach((place, index) => {
+    // 필수 방문 장소는 오전/오후에 우선 배치
+    const timeSlot = index === 0 ? 'morning' : 'afternoon';
+    const scheduledTime = index === 0 ? '09:30' : '15:00';
     
-    const availablePlaces = categorizedPlaces[slot.category]
-      ?.filter((place: RecommendedPlace) => 
+    const enhancedPlace: RecommendedPlace = {
+      ...place,
+      timeSlot,
+      activityType: 'must_visit',
+      scheduledTime,
+      orderIndex: orderIndex++,
+      tags: [...(place.tags || []), '필수방문', '⭐ 필수']
+    };
+    
+    dayPlan.push(enhancedPlace);
+  });
+
+  // 시간대별로 일정 채우기
+  scheduleTemplate.forEach(slot => {
+    if (dayPlan.length >= 8) return; // 최대 8개 제한
+    
+    // 해당 시간대에 이미 필수 방문 장소가 있는지 확인
+    const hasRequiredPlace = dayPlan.some(place => 
+      place.timeSlot === slot.timeSlot && place.activityType === 'must_visit'
+    );
+    
+    // 필수 방문 장소가 있는 시간대는 개수 조정
+    const actualCount = hasRequiredPlace ? Math.max(0, slot.count - 1) : slot.count;
+    
+    if (actualCount <= 0) return;
+
+    // 해당 카테고리에서 장소 선택
+    const availablePlaces: RecommendedPlace[] = [];
+    
+    slot.categories.forEach(categoryKey => {
+      const categoryPlaces = categorizedPlaces[categoryKey as keyof ReturnType<typeof categorizePlacesByType>] || [];
+      availablePlaces.push(...categoryPlaces);
+    });
+
+    const filteredPlaces = availablePlaces
+      .filter((place: RecommendedPlace) => 
         !usedPlaces.has(place.id) && 
-        !dayPlan.some(p => p.id === place.id) // 이미 선택된 장소 제외
+        !dayPlan.some(p => p.id === place.id)
       )
-      ?.sort((a: RecommendedPlace, b: RecommendedPlace) => {
-        // 필수 방문 장소 우선 순위, 그 다음 별점과 매칭 점수
-        const priorityA = a.tags?.includes('필수방문') ? 1000 : 0;
-        const priorityB = b.tags?.includes('필수방문') ? 1000 : 0;
-        const scoreA = priorityA + (a.rating || 0) * 20 + (a.matchScore || 0);
-        const scoreB = priorityB + (b.rating || 0) * 20 + (b.matchScore || 0);
+      .sort((a: RecommendedPlace, b: RecommendedPlace) => {
+        const scoreA = (a.rating || 0) * 20 + (a.matchScore || 0);
+        const scoreB = (b.rating || 0) * 20 + (b.matchScore || 0);
         return scoreB - scoreA;
       });
+
+    const selectedPlaces = filteredPlaces.slice(0, actualCount);
     
-    if (availablePlaces && availablePlaces.length > 0) {
-      const selectedPlaces = availablePlaces.slice(0, Math.min(slot.count, 8 - dayPlan.length));
-      dayPlan.push(...selectedPlaces);
-    }
+    selectedPlaces.forEach((place, index) => {
+      // 시간 계산 (같은 시간대 내에서 30분씩 간격)
+      const baseTime = slot.time;
+      const [hours, minutes] = baseTime.split(':').map(Number);
+      const adjustedMinutes = minutes + (index * 30);
+      const finalHours = hours + Math.floor(adjustedMinutes / 60);
+      const finalMinutes = adjustedMinutes % 60;
+      const scheduledTime = `${finalHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
+
+      const enhancedPlace: RecommendedPlace = {
+        ...place,
+        timeSlot: slot.timeSlot,
+        activityType: slot.activityType,
+        scheduledTime,
+        orderIndex: orderIndex++,
+        description: `${place.description || place.category} | ${slot.purpose}`
+      };
+      
+      dayPlan.push(enhancedPlace);
+    });
   });
-  
-  // 8개 장소로 맞추기 (부족하면 다른 카테고리에서 보충)
+
+  // 부족한 경우 추가 장소로 채우기
   if (dayPlan.length < 8) {
     const allAvailable = (Object.values(categorizedPlaces) as RecommendedPlace[][])
       .flat()
@@ -780,21 +884,35 @@ const generateDayItinerary = (
         !dayPlan.find(p => p.id === place.id)
       )
       .sort((a: RecommendedPlace, b: RecommendedPlace) => {
-        // 필수 방문 장소 우선 순위
-        const priorityA = a.tags?.includes('필수방문') ? 1000 : 0;
-        const priorityB = b.tags?.includes('필수방문') ? 1000 : 0;
-        const scoreA = priorityA + (a.rating || 0) * 20 + (a.matchScore || 0);
-        const scoreB = priorityB + (b.rating || 0) * 20 + (b.matchScore || 0);
+        const scoreA = (a.rating || 0) * 20 + (a.matchScore || 0);
+        const scoreB = (b.rating || 0) * 20 + (b.matchScore || 0);
         return scoreB - scoreA;
       });
     
     const needed = 8 - dayPlan.length;
-    dayPlan.push(...allAvailable.slice(0, needed));
+    const additionalPlaces = allAvailable.slice(0, needed);
+    
+    additionalPlaces.forEach((place, index) => {
+      const enhancedPlace: RecommendedPlace = {
+        ...place,
+        timeSlot: 'afternoon',
+        activityType: 'attraction',
+        scheduledTime: `${17 + index}:00`,
+        orderIndex: orderIndex++,
+        description: `${place.description || place.category} | 추가 활동`
+      };
+      
+      dayPlan.push(enhancedPlace);
+    });
   }
+
+  // orderIndex 순으로 정렬
+  const sortedDayPlan = dayPlan.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
   
-  console.log(`${dayIndex + 1}일차 최종 일정 (${dayPlan.length}개):`, dayPlan.map(p => p.name));
+  console.log(`${dayIndex + 1}일차 최종 일정 (${sortedDayPlan.length}개):`, 
+    sortedDayPlan.map(p => `${p.scheduledTime} ${p.name} (${p.timeSlot})`));
   
-  return dayPlan.slice(0, 8);
+  return sortedDayPlan.slice(0, 8);
 };
 
 // 이동시간을 고려한 하루 경로 최적화

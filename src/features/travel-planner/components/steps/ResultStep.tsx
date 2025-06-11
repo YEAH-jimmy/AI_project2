@@ -7,20 +7,21 @@ import { useTravelPlannerStore } from '@/lib/stores/travel-planner-store'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { 
-  ArrowLeft, 
-  Calendar, 
-  MapPin, 
+  Calendar,
+  BarChart3,
+  Loader2,
+  MapPin,
   Clock,
   Download,
   Share2,
-  Sparkles,
-  RefreshCw,
-  CheckCircle,
-  Map,
-  PanelLeftClose,
+  Trash2,
+  Repeat,
+  ArrowLeft,
+  RotateCcw,
   PanelLeftOpen,
   Star,
-  Navigation
+  Navigation,
+  Phone
 } from 'lucide-react'
 import { KakaoMap } from '../KakaoMap'
 import { getPopularPlacesByRegion, RecommendedPlace, generateOptimizedItinerary } from '@/lib/place-recommendation'
@@ -482,7 +483,7 @@ export function ResultStep() {
                 <div className="w-20 h-20 mx-auto">
                   <div className="w-20 h-20 border-4 border-blue-200 rounded-full animate-spin border-t-blue-600"></div>
                 </div>
-                <Sparkles className="w-8 h-8 text-blue-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+                <BarChart3 className="w-8 h-8 text-blue-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
               </div>
               
               <div className="space-y-2">
@@ -668,7 +669,7 @@ export function ResultStep() {
           className="flex items-center gap-2"
           variant="outline"
         >
-          <RefreshCw className="w-4 h-4" />
+          <Repeat className="w-4 h-4" />
           새로운 여행 계획
         </Button>
       </div>
@@ -807,32 +808,34 @@ export function ResultStep() {
                               const isFirstDay = day === 0;
                               const isLastDay = day === dayCount - 1;
                               
-                              // 최적화된 일정이 있으면 우선 사용
-                              if (optimizedItinerary[day] && optimizedItinerary[day].length > 0) {
-                                const dayPlaces = optimizedItinerary[day];
+                              // 최적화된 일정이 있으면 해당 사용 (우선순위 1)
+                              if (optimizedItinerary && optimizedItinerary[dayIndex] && optimizedItinerary[dayIndex].length > 0) {
+                                const dayPlaces = optimizedItinerary[dayIndex];
+                                console.log(`${dayIndex + 1}일차 최적화된 일정 사용:`, dayPlaces.map(p => p.name));
                                 
-                                // 중복 제거: 같은 이름의 장소는 제외
-                                const uniquePlaces = dayPlaces.filter((place, index, arr) => 
-                                  arr.findIndex(p => p.name === place.name) === index
-                                );
-                                
-                                let itinerary = uniquePlaces.map((place, index) => ({
-                                  time: generateTimeSlot(index),
+                                // 최적화된 일정을 새로운 형식으로 변환
+                                let itinerary = dayPlaces.map((place, index) => ({
+                                  time: place.scheduledTime || generateTimeSlot(index),
                                   activity: place.name,
                                   location: place.roadAddress || place.address,
                                   type: categorizePlace(place.category),
-                                  description: place.category,
+                                  description: place.description || place.category,
                                   rating: place.rating,
                                   reviewCount: place.reviewCount,
                                   matchScore: place.matchScore,
                                   phone: place.phone,
-                                  isOptimized: true // 최적화된 일정임을 표시
+                                  // 새로운 형식 정보 추가
+                                  timeSlot: place.timeSlot,
+                                  activityType: place.activityType,
+                                  scheduledTime: place.scheduledTime,
+                                  orderIndex: place.orderIndex,
+                                  tags: place.tags,
+                                  isOptimized: true
                                 }));
-                                
-                                // 첫날과 마지막날 교통편 조정 (숙소는 이미 추천 시스템에서 추가됨)
+
+                                // 교통편 정보 추가 (첫날/마지막날)
                                 if (transportPoint) {
                                   if (isFirstDay) {
-                                    // 첫날: 교통편 도착 맨 앞에 추가
                                     itinerary.unshift({
                                       time: '08:00',
                                       activity: `${transportPoint} 도착`,
@@ -843,10 +846,13 @@ export function ResultStep() {
                                       reviewCount: 0,
                                       matchScore: 0,
                                       phone: '',
+                                      timeSlot: 'early_morning',
+                                      activityType: 'transport',
+                                      scheduledTime: '08:00',
+                                      orderIndex: -1,
                                       isOptimized: true
                                     });
                                   } else if (isLastDay) {
-                                    // 마지막날: 교통편 출발 맨 마지막에 추가
                                     itinerary.push({
                                       time: '18:00',
                                       activity: `${transportPoint} 출발`,
@@ -857,14 +863,23 @@ export function ResultStep() {
                                       reviewCount: 0,
                                       matchScore: 0,
                                       phone: '',
+                                      timeSlot: 'evening',
+                                      activityType: 'transport',
+                                      scheduledTime: '18:00',
+                                      orderIndex: 999,
                                       isOptimized: true
                                     });
                                   }
                                 }
-                                
-                                // 주의: 숙소 체크인/체크아웃은 place-recommendation.ts에서 자동으로 추가되므로 
-                                // 여기서는 추가하지 않음 (중복 방지)
-                                
+
+                                // orderIndex나 scheduledTime 기준으로 정렬
+                                itinerary.sort((a, b) => {
+                                  if (a.orderIndex !== undefined && b.orderIndex !== undefined) {
+                                    return a.orderIndex - b.orderIndex;
+                                  }
+                                  return a.time.localeCompare(b.time);
+                                });
+
                                 return itinerary;
                               }
                               
@@ -1120,7 +1135,22 @@ export function ResultStep() {
                             
                             const dayItinerary = getSpecificItinerary(planData.destination || '서울', dayIndex);
                             
-                            const getActivityIcon = (type: string) => {
+                            const getActivityIcon = (type: string, activityType?: string) => {
+                              // 새로운 activityType 우선 적용
+                              if (activityType) {
+                                switch (activityType) {
+                                  case 'dining': return '🍽️';
+                                  case 'attraction': return '🏛️';
+                                  case 'culture': return '🎭';
+                                  case 'shopping': return '🛍️';
+                                  case 'accommodation': return '🏨';
+                                  case 'transport': return '🚗';
+                                  case 'must_visit': return '⭐';
+                                  default: break;
+                                }
+                              }
+                              
+                              // 기존 type 기반 아이콘 (호환성 유지)
                               switch (type) {
                                 case 'food': return '🍽️';
                                 case 'attraction': return '🏛️';
@@ -1130,6 +1160,43 @@ export function ResultStep() {
                                 case 'checkin': return '🏨';
                                 case 'checkout': return '🛄';
                                 default: return '📍';
+                              }
+                            };
+
+                            const getTimeSlotLabel = (timeSlot?: string) => {
+                              switch (timeSlot) {
+                                case 'early_morning': return '🌅 아침';
+                                case 'morning': return '🌄 오전';
+                                case 'lunch': return '🍴 점심';
+                                case 'afternoon': return '☀️ 오후';
+                                case 'evening': return '🌆 저녁';
+                                case 'night': return '🌙 밤';
+                                default: return '';
+                              }
+                            };
+
+                            const getTimeSlotColor = (timeSlot?: string) => {
+                              switch (timeSlot) {
+                                case 'early_morning': return 'bg-orange-50 border-orange-200 text-orange-700';
+                                case 'morning': return 'bg-blue-50 border-blue-200 text-blue-700';
+                                case 'lunch': return 'bg-green-50 border-green-200 text-green-700';
+                                case 'afternoon': return 'bg-yellow-50 border-yellow-200 text-yellow-700';
+                                case 'evening': return 'bg-purple-50 border-purple-200 text-purple-700';
+                                case 'night': return 'bg-indigo-50 border-indigo-200 text-indigo-700';
+                                default: return 'bg-gray-50 border-gray-200 text-gray-700';
+                              }
+                            };
+
+                            const getActivityTypeLabel = (activityType?: string) => {
+                              switch (activityType) {
+                                case 'dining': return '식사';
+                                case 'attraction': return '관광';
+                                case 'culture': return '문화';
+                                case 'shopping': return '쇼핑';
+                                case 'accommodation': return '숙박';
+                                case 'transport': return '이동';
+                                case 'must_visit': return '필수';
+                                default: return '기타';
                               }
                             };
                             
@@ -1281,44 +1348,107 @@ export function ResultStep() {
                                         </div>
                                       )}
                                       
-                                      {/* 기존 활동 정보 */}
-                                      <div className="bg-gray-50 rounded-lg p-3 hover:bg-gray-100 transition-colors">
-                                        <div className="flex items-start gap-3">
-                                          <div className="flex items-center gap-2 min-w-0">
-                                            <Clock className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                                            <span className="text-gray-700 font-medium">{item.time}</span>
-                                            <span className="text-lg">{getActivityIcon(item.type)}</span>
-                                          </div>
-                                          <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                              <h5 className="font-medium text-gray-900">{item.activity}</h5>
-                                              {item.rating && (
-                                                <div className="flex items-center gap-1 bg-yellow-50 px-2 py-0.5 rounded-full">
-                                                  <Star className="w-3 h-3 text-yellow-500 fill-current" />
-                                                  <span className="text-xs text-yellow-700 font-medium">{item.rating}</span>
-                                                  {item.reviewCount && (
-                                                    <span className="text-xs text-yellow-600">({item.reviewCount})</span>
-                                                  )}
-                                                </div>
-                                              )}
-                                              {item.matchScore && item.matchScore > 70 && (
-                                                <div className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
-                                                  추천 {Math.round(item.matchScore)}점
-                                                </div>
-                                              )}
-                                            </div>
-                                            <p className="text-sm text-gray-600 mb-1">📍 {item.location}</p>
-                                            {item.description && (
-                                              <p className="text-sm text-gray-500">{item.description}</p>
-                                            )}
-                                            {item.rating && item.rating >= 4.5 && (
-                                              <div className="mt-1 text-xs text-green-600 font-medium">
-                                                ⭐ 높은 평점의 추천 장소입니다!
-                                              </div>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </div>
+                                                                             {/* 기존 활동 정보 - 새로운 형식으로 개선 */}
+                                       <div className={`rounded-lg p-4 hover:shadow-md transition-all ${
+                                         item.timeSlot ? getTimeSlotColor(item.timeSlot) : 'bg-gray-50 hover:bg-gray-100'
+                                       } border-2`}>
+                                         <div className="flex items-start gap-3">
+                                           {/* 시간 및 아이콘 */}
+                                           <div className="flex flex-col items-center gap-2 min-w-0">
+                                             <div className="flex items-center gap-2">
+                                               <Clock className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                                               <span className="text-gray-700 font-medium text-sm">{item.time || item.scheduledTime}</span>
+                                             </div>
+                                             <span className="text-2xl">{getActivityIcon(item.type, item.activityType)}</span>
+                                             {item.timeSlot && (
+                                               <span className="text-xs font-medium px-2 py-1 rounded-full bg-white/50">
+                                                 {getTimeSlotLabel(item.timeSlot)}
+                                               </span>
+                                             )}
+                                           </div>
+                                           
+                                           {/* 활동 정보 */}
+                                           <div className="flex-1 min-w-0">
+                                             <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                               <h5 className="font-semibold text-gray-900 text-base">{item.activity}</h5>
+                                               
+                                               {/* 활동 타입 뱃지 */}
+                                               {item.activityType && (
+                                                 <div className="px-2 py-1 bg-white/70 text-gray-700 text-xs rounded-full border">
+                                                   {getActivityTypeLabel(item.activityType)}
+                                                 </div>
+                                               )}
+                                               
+                                               {/* 필수 방문 표시 */}
+                                               {item.tags && item.tags.includes('필수방문') && (
+                                                 <div className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-medium">
+                                                   🌟 필수방문
+                                                 </div>
+                                               )}
+                                               
+                                               {/* 예약숙소 표시 */}
+                                               {item.tags && item.tags.includes('예약숙소') && (
+                                                 <div className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
+                                                   🏨 예약완료
+                                                 </div>
+                                               )}
+                                               
+                                               {/* 최적화됨 표시 */}
+                                               {item.isOptimized && (
+                                                 <div className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">
+                                                   ✨ 최적화됨
+                                                 </div>
+                                               )}
+                                             </div>
+                                             
+                                             {/* 위치 정보 */}
+                                             <p className="text-sm text-gray-600 mb-2 flex items-center gap-1">
+                                               <MapPin className="w-3 h-3 flex-shrink-0" />
+                                               {item.location}
+                                             </p>
+                                             
+                                             {/* 설명 */}
+                                             {item.description && (
+                                               <p className="text-sm text-gray-600 mb-2 bg-white/50 rounded p-2">
+                                                 {item.description}
+                                               </p>
+                                             )}
+                                             
+                                             {/* 평점 및 추가 정보 */}
+                                             <div className="flex items-center gap-3 flex-wrap">
+                                               {item.rating && (
+                                                 <div className="flex items-center gap-1 bg-yellow-50 px-2 py-1 rounded-full">
+                                                   <Star className="w-3 h-3 text-yellow-500 fill-current" />
+                                                   <span className="text-xs text-yellow-700 font-medium">{item.rating}</span>
+                                                   {item.reviewCount && (
+                                                     <span className="text-xs text-yellow-600">({item.reviewCount})</span>
+                                                   )}
+                                                 </div>
+                                               )}
+                                               
+                                               {item.matchScore && item.matchScore > 70 && (
+                                                 <div className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">
+                                                   🎯 매칭도 {Math.round(item.matchScore)}%
+                                                 </div>
+                                               )}
+                                               
+                                               {item.phone && (
+                                                 <div className="text-xs text-gray-500 flex items-center gap-1">
+                                                   <Phone className="w-3 h-3" />
+                                                   {item.phone}
+                                                 </div>
+                                               )}
+                                             </div>
+                                             
+                                             {/* 높은 평점 특별 표시 */}
+                                             {item.rating && item.rating >= 4.5 && (
+                                               <div className="mt-2 text-xs text-green-600 font-medium bg-green-50 rounded p-2">
+                                                 🌟 높은 평점의 추천 장소입니다! ({item.rating}점)
+                                               </div>
+                                             )}
+                                           </div>
+                                         </div>
+                                       </div>
                                     </div>
                                   ))}
                                 </div>
