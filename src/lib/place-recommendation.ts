@@ -709,12 +709,18 @@ const categorizePlacesByType = (places: RecommendedPlace[]) => {
       p.category.includes('미술관')
     ),
     restaurants: places.filter(p => 
-      p.category.includes('음식점') || 
-      p.category.includes('맛집') ||
-      p.category.includes('한식') ||
-      p.category.includes('중식') ||
-      p.category.includes('일식') ||
-      p.category.includes('양식')
+      (p.category.includes('음식점') || 
+       p.category.includes('맛집') ||
+       p.category.includes('한식') ||
+       p.category.includes('중식') ||
+       p.category.includes('일식') ||
+       p.category.includes('양식')) &&
+      // 카페 제외
+      !p.category.includes('카페') &&
+      !p.category.includes('커피') &&
+      !p.category.includes('디저트') &&
+      !p.name.toLowerCase().includes('카페') &&
+      !p.name.toLowerCase().includes('커피')
     ),
     cafes: places.filter(p => 
       p.category.includes('카페') || 
@@ -904,10 +910,27 @@ const generateDayItinerary = (
     });
 
     const filteredPlaces = availablePlaces
-      .filter((place: RecommendedPlace) => 
-        !usedPlaces.has(place.id) && 
-        !dayPlan.some(p => p.id === place.id)
-      )
+      .filter((place: RecommendedPlace) => {
+        // 기본 필터링
+        if (usedPlaces.has(place.id) || dayPlan.some(p => p.id === place.id)) {
+          return false;
+        }
+        
+        // 식사 시간대(아침, 점심, 저녁)에는 카페 제외
+        if (slot.activityType === 'dining' && 
+            (slot.timeSlot === 'early_morning' || slot.timeSlot === 'lunch' || slot.timeSlot === 'evening')) {
+          // "음식점 > 카페" 카테고리나 카페 관련 키워드가 포함된 장소 제외
+          if (place.category.includes('카페') || 
+              place.category.includes('커피') || 
+              place.category.includes('디저트') ||
+              place.name.toLowerCase().includes('카페') ||
+              place.name.toLowerCase().includes('커피')) {
+            return false;
+          }
+        }
+        
+        return true;
+      })
       .sort((a: RecommendedPlace, b: RecommendedPlace) => {
         const scoreA = (a.rating || 0) * 20 + (a.matchScore || 0);
         const scoreB = (b.rating || 0) * 20 + (b.matchScore || 0);

@@ -40,9 +40,9 @@ const sampleDestinations = [
 // 시간대별 장소 정렬 함수
 const sortPlacesByTimeAndType = (places: RecommendedPlace[]) => {
   const morningTypes = ['attraction', 'culture']
-  const lunchTypes = ['food']
-  const afternoonTypes = ['shopping', 'attraction', 'culture']
-  const dinnerTypes = ['food']
+  const lunchTypes = ['food'] // 카페 제외
+  const afternoonTypes = ['shopping', 'attraction', 'culture', 'cafe'] // 카페는 오후에만
+  const dinnerTypes = ['food'] // 카페 제외
   const eveningTypes = ['attraction', 'nightlife']
   
   const categorized = {
@@ -84,7 +84,11 @@ const generateTimeSlot = (index: number): string => {
 
 // 장소 카테고리 분류
 const categorizePlace = (category: string): string => {
-  if (category.includes('음식점') || category.includes('카페') || category.includes('디저트')) {
+  // 카페와 일반 음식점 구분
+  if (category.includes('카페') || category.includes('커피') || category.includes('디저트')) {
+    return 'cafe'
+  }
+  if (category.includes('음식점') || category.includes('맛집') || category.includes('한식') || category.includes('중식') || category.includes('일식') || category.includes('양식')) {
     return 'food'
   }
   if (category.includes('관광') || category.includes('명소') || category.includes('공원')) {
