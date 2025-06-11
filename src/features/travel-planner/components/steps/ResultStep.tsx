@@ -19,6 +19,8 @@ import {
   ArrowLeft,
   RotateCcw,
   PanelLeftOpen,
+  PanelLeftClose,
+  Map,
   Star,
   Navigation,
   Phone
