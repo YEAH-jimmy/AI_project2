@@ -715,12 +715,18 @@ const categorizePlacesByType = (places: RecommendedPlace[]) => {
        p.category.includes('중식') ||
        p.category.includes('일식') ||
        p.category.includes('양식')) &&
-      // 카페 제외
+      // 카페와 간식 제외
       !p.category.includes('카페') &&
       !p.category.includes('커피') &&
       !p.category.includes('디저트') &&
+      !p.category.includes('간식') &&
+      !p.category.includes('베이커리') &&
+      !p.category.includes('도넛') &&
+      !p.category.includes('아이스크림') &&
       !p.name.toLowerCase().includes('카페') &&
-      !p.name.toLowerCase().includes('커피')
+      !p.name.toLowerCase().includes('커피') &&
+      !p.name.toLowerCase().includes('베이커리') &&
+      !p.name.toLowerCase().includes('도넛')
     ),
     cafes: places.filter(p => 
       p.category.includes('카페') || 
@@ -916,15 +922,21 @@ const generateDayItinerary = (
           return false;
         }
         
-        // 식사 시간대(아침, 점심, 저녁)에는 카페 제외
+        // 식사 시간대(아침, 점심, 저녁)에는 카페와 간식 제외
         if (slot.activityType === 'dining' && 
             (slot.timeSlot === 'early_morning' || slot.timeSlot === 'lunch' || slot.timeSlot === 'evening')) {
-          // "음식점 > 카페" 카테고리나 카페 관련 키워드가 포함된 장소 제외
+          // "음식점 > 카페", "음식점 > 간식" 카테고리나 관련 키워드가 포함된 장소 제외
           if (place.category.includes('카페') || 
               place.category.includes('커피') || 
               place.category.includes('디저트') ||
+              place.category.includes('간식') ||
+              place.category.includes('베이커리') ||
+              place.category.includes('도넛') ||
+              place.category.includes('아이스크림') ||
               place.name.toLowerCase().includes('카페') ||
-              place.name.toLowerCase().includes('커피')) {
+              place.name.toLowerCase().includes('커피') ||
+              place.name.toLowerCase().includes('베이커리') ||
+              place.name.toLowerCase().includes('도넛')) {
             return false;
           }
         }
@@ -937,7 +949,72 @@ const generateDayItinerary = (
         return scoreB - scoreA;
       });
 
-    const selectedPlaces = filteredPlaces.slice(0, actualCount);
+    let selectedPlaces = filteredPlaces.slice(0, actualCount);
+    
+    // 식사 시간대인데 적절한 음식점을 찾지 못한 경우 강제로 음식점 추가
+    if (slot.activityType === 'dining' && selectedPlaces.length === 0) {
+      console.warn(`${dayIndex + 1}일차 ${slot.purpose} 시간대에 적절한 음식점을 찾지 못했습니다. 대체 음식점을 추가합니다.`);
+      
+      // 모든 음식점에서 재검색 (카페/간식 제외하고)
+      const allRestaurants = (Object.values(categorizedPlaces) as RecommendedPlace[][])
+        .flat()
+        .filter((place: RecommendedPlace) => {
+          // 기본 필터링
+          if (usedPlaces.has(place.id) || dayPlan.some(p => p.id === place.id)) {
+            return false;
+          }
+          
+          // 음식점인지 확인하고 카페/간식 제외
+          const isRestaurant = place.category.includes('음식점') || 
+                               place.category.includes('맛집') ||
+                               place.category.includes('한식') ||
+                               place.category.includes('중식') ||
+                               place.category.includes('일식') ||
+                               place.category.includes('양식');
+          
+          const isCafeOrSnack = place.category.includes('카페') ||
+                               place.category.includes('커피') ||
+                               place.category.includes('디저트') ||
+                               place.category.includes('간식') ||
+                               place.category.includes('베이커리') ||
+                               place.category.includes('도넛') ||
+                               place.category.includes('아이스크림') ||
+                               place.name.toLowerCase().includes('카페') ||
+                               place.name.toLowerCase().includes('커피') ||
+                               place.name.toLowerCase().includes('베이커리') ||
+                               place.name.toLowerCase().includes('도넛');
+          
+          return isRestaurant && !isCafeOrSnack;
+        })
+        .sort((a: RecommendedPlace, b: RecommendedPlace) => {
+          const scoreA = (a.rating || 0) * 20 + (a.matchScore || 0);
+          const scoreB = (b.rating || 0) * 20 + (b.matchScore || 0);
+          return scoreB - scoreA;
+        });
+      
+      // 최소 1개의 음식점은 추가
+      if (allRestaurants.length > 0) {
+        selectedPlaces = allRestaurants.slice(0, Math.max(1, actualCount));
+        console.log(`${dayIndex + 1}일차 ${slot.purpose}에 대체 음식점 추가: ${selectedPlaces[0].name}`);
+      } else {
+        // 정말 음식점이 없는 경우 기본 음식점 생성
+        const fallbackRestaurant: RecommendedPlace = {
+          id: `fallback_restaurant_${dayIndex}_${slot.timeSlot}`,
+          name: `${destination} 지역 ${slot.purpose.includes('아침') ? '아침식사' : slot.purpose.includes('점심') ? '점심식사' : '저녁식사'}`,
+          category: '음식점',
+          address: `${destination} 중심가`,
+          lat: 0, // 임시 좌표
+          lng: 0, // 임시 좌표
+          description: `${slot.purpose} 추천 음식점을 직접 검색해보세요`,
+          source: 'kakao' as const,
+          tags: ['음식점', '필수식사'],
+          activityType: 'dining'
+        };
+        
+        selectedPlaces = [fallbackRestaurant];
+        console.log(`${dayIndex + 1}일차 ${slot.purpose}에 기본 음식점 생성`);
+      }
+    }
     
     selectedPlaces.forEach((place, index) => {
       // 시간 계산 (같은 시간대 내에서 30분씩 간격)

@@ -84,8 +84,9 @@ const generateTimeSlot = (index: number): string => {
 
 // 장소 카테고리 분류
 const categorizePlace = (category: string): string => {
-  // 카페와 일반 음식점 구분
-  if (category.includes('카페') || category.includes('커피') || category.includes('디저트')) {
+  // 카페, 간식과 일반 음식점 구분
+  if (category.includes('카페') || category.includes('커피') || category.includes('디저트') || 
+      category.includes('간식') || category.includes('베이커리') || category.includes('도넛') || category.includes('아이스크림')) {
     return 'cafe'
   }
   if (category.includes('음식점') || category.includes('맛집') || category.includes('한식') || category.includes('중식') || category.includes('일식') || category.includes('양식')) {
