@@ -844,9 +844,6 @@ export function ResultStep() {
                                       location: transportPoint,
                                       type: 'transport',
                                       description: '여행지 도착',
-                                      rating: 0,
-                                      reviewCount: 0,
-                                      matchScore: 0,
                                       phone: '',
                                       timeSlot: 'early_morning',
                                       activityType: 'transport',
@@ -861,9 +858,6 @@ export function ResultStep() {
                                       location: transportPoint,
                                       type: 'transport',
                                       description: '여행지 출발',
-                                      rating: 0,
-                                      reviewCount: 0,
-                                      matchScore: 0,
                                       phone: '',
                                       timeSlot: 'evening',
                                       activityType: 'transport',
@@ -927,9 +921,6 @@ export function ResultStep() {
                                         location: transportPoint,
                                         type: 'transport',
                                         description: '여행지 도착',
-                                        rating: 0,
-                                        reviewCount: 0,
-                                        matchScore: 0,
                                         phone: ''
                                       });
                                     } else if (isLastDay) {
@@ -939,9 +930,6 @@ export function ResultStep() {
                                         location: transportPoint,
                                         type: 'transport',
                                         description: '여행지 출발',
-                                        rating: 0,
-                                        reviewCount: 0,
-                                        matchScore: 0,
                                         phone: ''
                                       });
                                     }
