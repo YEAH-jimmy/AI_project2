@@ -2,6 +2,7 @@
 
 import { ArrowLeft, Home } from 'lucide-react'
 import Link from 'next/link'
+import { Suspense } from 'react'
 import { Button } from '@/components/ui/button'
 import { TravelPlannerWizard } from '@/features/travel-planner/components/TravelPlannerWizard'
 import { ProgressIndicator } from '@/features/travel-planner/components/ProgressIndicator'
@@ -64,7 +65,11 @@ export default function PlannerPage() {
       <main className="w-full">
         <div className="px-4 sm:px-6 lg:px-8 py-8">
           <div className="w-full max-w-none">
-            <TravelPlannerWizard />
+            <Suspense fallback={<div className="flex justify-center items-center py-20">
+              <div className="text-gray-500">로딩 중...</div>
+            </div>}>
+              <TravelPlannerWizard />
+            </Suspense>
           </div>
         </div>
       </main>

@@ -9,11 +9,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Home, ArrowRight, ArrowLeft, MapPin, Sparkles, Lightbulb } from 'lucide-react'
+import { Home, ArrowRight, ArrowLeft, MapPin, Sparkles, Lightbulb, Loader2, Star, Wifi, Car } from 'lucide-react'
+import { searchAccommodationsNearby, getCoordinatesByAddress, AccommodationInfo } from '@/lib/kakao-map'
 
 const accommodationSchema = z.object({
-  accommodationName: z.string().min(1, '숙소명을 입력해주세요'),
-  accommodationAddress: z.string().min(1, '숙소 주소를 입력해주세요'),
+  accommodationName: z.string().optional(),
+  accommodationAddress: z.string().optional(),
   accommodationType: z.enum(['hotel', 'airbnb', 'guesthouse', 'resort', 'other']),
 })
 
@@ -28,10 +29,19 @@ const accommodationTypes = [
 ]
 
 export function AccommodationStep() {
-  const { planData, updatePlanData, setCurrentStep } = useTravelPlannerStore()
+  const { 
+    planData, 
+    updatePlanData, 
+    setCurrentStep,
+    recommendedAccommodations,
+    isLoadingAccommodations,
+    setRecommendedAccommodations,
+    setIsLoadingAccommodations
+  } = useTravelPlannerStore()
   const [hasBookedAccommodation, setHasBookedAccommodation] = useState(
     planData.hasBookedAccommodation || false
   )
+  const [showRecommendations, setShowRecommendations] = useState(false)
   
   const {
     register,
@@ -54,15 +64,10 @@ export function AccommodationStep() {
   const accommodationAddressValue = watch('accommodationAddress')
 
   const onSubmit = (data: AccommodationFormData) => {
-    // 숙소 예약한 경우 반드시 정보를 입력해야 함
-    if (hasBookedAccommodation && (!data.accommodationName || !data.accommodationAddress)) {
-      return; // 유효성 검증에서 걸림
-    }
-    
     updatePlanData({
       hasBookedAccommodation,
-      accommodationName: hasBookedAccommodation ? data.accommodationName : undefined,
-      accommodationLocation: hasBookedAccommodation && data.accommodationAddress 
+      accommodationName: data.accommodationName,
+      accommodationLocation: data.accommodationAddress 
         ? { address: data.accommodationAddress } 
         : undefined,
       accommodationType: data.accommodationType,
@@ -85,6 +90,69 @@ export function AccommodationStep() {
 
   const handleTypeSelect = (type: string) => {
     setValue('accommodationType', type as any, { shouldValidate: true })
+  }
+
+  // AI 숙소 추천 기능
+  const handleAIRecommendation = async () => {
+    if (!planData.destination) {
+      alert('먼저 여행지를 선택해주세요.')
+      return
+    }
+
+    setIsLoadingAccommodations(true)
+    setShowRecommendations(true)
+
+    try {
+      console.log(`${planData.destination} 지역 숙소 추천 시작...`)
+      
+      // 목적지 좌표 얻기
+      const coordinates = await getCoordinatesByAddress(planData.destination)
+      
+      if (!coordinates) {
+        throw new Error('목적지 좌표를 찾을 수 없습니다.')
+      }
+
+      // 선택된 숙소 타입으로 검색
+      const accommodations = await searchAccommodationsNearby(
+        coordinates.lat,
+        coordinates.lng,
+        accommodationTypeValue,
+        15 // 15km 반경
+      )
+
+      if (accommodations.length === 0) {
+        throw new Error('해당 지역에서 숙소를 찾을 수 없습니다.')
+      }
+
+      setRecommendedAccommodations(accommodations)
+      console.log(`${accommodations.length}개 숙소 추천 완료`)
+      
+    } catch (error) {
+      console.error('숙소 추천 중 오류:', error)
+      alert(`숙소 추천 중 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
+      setShowRecommendations(false)
+    } finally {
+      setIsLoadingAccommodations(false)
+    }
+  }
+
+  // 추천 숙소 선택
+  const handleSelectRecommendedAccommodation = (accommodation: AccommodationInfo) => {
+    setValue('accommodationName', accommodation.name)
+    setValue('accommodationAddress', accommodation.address)
+    
+    // 플랜 데이터 업데이트
+    updatePlanData({
+      accommodationName: accommodation.name,
+      accommodationLocation: { 
+        address: accommodation.address,
+        lat: accommodation.lat,
+        lng: accommodation.lng
+      },
+    })
+    
+    setShowRecommendations(false)
+    setHasBookedAccommodation(true) // 선택하면 예약한 것으로 처리
   }
 
   return (
@@ -172,12 +240,8 @@ export function AccommodationStep() {
                         placeholder="예: 롯데호텔 제주, 해운대 그랜드 호텔..."
                         {...register('accommodationName')}
                         className="pl-9"
-                        required
                       />
                     </div>
-                    {errors.accommodationName && (
-                      <p className="text-sm text-red-600">{errors.accommodationName.message}</p>
-                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -189,12 +253,8 @@ export function AccommodationStep() {
                         placeholder="예: 서울특별시 중구 명동, 부산광역시 해운대구..."
                         {...register('accommodationAddress')}
                         className="pl-9"
-                        required
                       />
                     </div>
-                    {errors.accommodationAddress && (
-                      <p className="text-sm text-red-600">{errors.accommodationAddress.message}</p>
-                    )}
                     <p className="text-xs text-gray-500">
                       정확한 주소나 대략적인 지역명을 입력해주세요
                     </p>
@@ -225,7 +285,7 @@ export function AccommodationStep() {
 
             {/* 선호하는 숙소 형태 - 예약 안 했을 경우에만 표시 */}
             {!hasBookedAccommodation && (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <Label>선호하는 숙소 형태</Label>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {accommodationTypes.map((type) => (
@@ -246,6 +306,102 @@ export function AccommodationStep() {
                         {type.description}
                       </div>
                     </button>
+                  ))}
+                </div>
+                
+                {/* AI 추천 버튼 */}
+                <div className="flex justify-center mt-4">
+                  <Button
+                    type="button"
+                    onClick={handleAIRecommendation}
+                    disabled={isLoadingAccommodations || !planData.destination}
+                    className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-6 py-2"
+                  >
+                    {isLoadingAccommodations ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        AI가 숙소를 찾는 중...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        AI 숙소 추천받기
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* AI 추천 숙소 결과 */}
+            {!hasBookedAccommodation && showRecommendations && recommendedAccommodations && (
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 space-y-4">
+                <div className="flex items-center gap-2 text-purple-700 font-medium">
+                  <Sparkles className="w-5 h-5" />
+                  AI 추천 숙소 ({recommendedAccommodations.length}개)
+                </div>
+                <p className="text-sm text-purple-600">
+                  {planData.destination}에서 {accommodationTypes.find(t => t.value === accommodationTypeValue)?.label} 타입으로 추천드려요!
+                </p>
+                
+                <div className="grid gap-3 max-h-96 overflow-y-auto">
+                  {recommendedAccommodations.map((accommodation, index) => (
+                    <div
+                      key={accommodation.id}
+                      className="bg-white border border-purple-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                      onClick={() => handleSelectRecommendedAccommodation(accommodation)}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <h4 className="font-medium text-gray-900 mb-1">
+                            {index + 1}. {accommodation.name}
+                          </h4>
+                          <p className="text-sm text-gray-600 mb-2">
+                            📍 {accommodation.address}
+                          </p>
+                          
+                          <div className="flex items-center gap-4 text-xs text-gray-500 mb-2">
+                            {accommodation.rating && (
+                              <div className="flex items-center gap-1">
+                                <Star className="w-3 h-3 text-yellow-400 fill-current" />
+                                <span>{accommodation.rating.toFixed(1)}</span>
+                              </div>
+                            )}
+                            {accommodation.reviewCount && (
+                              <span>리뷰 {accommodation.reviewCount}개</span>
+                            )}
+                            {/* 거리는 아직 일정이 확정되지 않았으므로 표시하지 않음 */}
+                          </div>
+                          
+                          {/* 가격 정보는 하드코딩된 데이터이므로 표시하지 않음 */}
+                          
+                          {accommodation.amenities && accommodation.amenities.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {accommodation.amenities.slice(0, 4).map((amenity, idx) => (
+                                <span
+                                  key={idx}
+                                  className="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded"
+                                >
+                                  {amenity}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="ml-2 bg-purple-600 hover:bg-purple-700"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleSelectRecommendedAccommodation(accommodation)
+                          }}
+                        >
+                          선택
+                        </Button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -304,7 +460,6 @@ export function AccommodationStep() {
               <Button 
                 type="submit"
                 className="flex items-center gap-2"
-                disabled={hasBookedAccommodation && (!accommodationNameValue || !accommodationAddressValue)}
               >
                 다음 단계
                 <ArrowRight className="w-4 h-4" />

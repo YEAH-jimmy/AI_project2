@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
+import { AccommodationInfo } from '../kakao-map'
 
 export interface TravelPlanData {
   destination?: string
@@ -13,8 +14,10 @@ export interface TravelPlanData {
   }
   accommodationName?: string
   hasBookedAccommodation?: boolean
+  // 여행지까지 가는 교통수단
+  destinationTransport?: 'airplane' | 'ktx' | 'train' | 'bus' | 'car' | 'other'
+  // 도시 내 이동수단
   localTransport?: 'public' | 'walk' | 'bicycle' | 'rental-car' | 'other'
-  intercityTransport?: 'airplane' | 'train' | 'bus' | 'car'
   travelers?: number
   ageGroups?: string[]
   ageGroupCounts?: { [key: string]: number }
@@ -69,8 +72,12 @@ interface TravelPlannerState {
   // Generated itinerary
   generatedItinerary?: GeneratedItinerary
   
+  // Recommended accommodations
+  recommendedAccommodations?: AccommodationInfo[]
+  
   // Loading states
   isGenerating: boolean
+  isLoadingAccommodations: boolean
   
   // Actions
   setCurrentStep: (step: number) => void
@@ -78,6 +85,8 @@ interface TravelPlannerState {
   resetPlanData: () => void
   setGeneratedItinerary: (itinerary: GeneratedItinerary) => void
   setIsGenerating: (loading: boolean) => void
+  setRecommendedAccommodations: (accommodations: AccommodationInfo[]) => void
+  setIsLoadingAccommodations: (loading: boolean) => void
 }
 
 const initialPlanData: TravelPlanData = {
@@ -105,6 +114,7 @@ export const useTravelPlannerStore = create<TravelPlannerState>()(
         currentStep: 1,
         planData: initialPlanData,
         isGenerating: false,
+        isLoadingAccommodations: false,
         
         setCurrentStep: (step) => {
           // 현재 단계를 로깅
@@ -122,18 +132,36 @@ export const useTravelPlannerStore = create<TravelPlannerState>()(
           console.log('Updated plan data:', get().planData);
         },
         
-        resetPlanData: () => 
+        resetPlanData: () => {
+          console.log('🔄 여행 계획 데이터 완전 초기화')
           set({ 
-            planData: initialPlanData, 
+            planData: { ...initialPlanData }, 
             currentStep: 1,
-            generatedItinerary: undefined
-          }),
+            generatedItinerary: undefined,
+            isGenerating: false,
+            recommendedAccommodations: undefined,
+            isLoadingAccommodations: false
+          })
+          
+          // 로컬 스토리지도 클리어하여 완전 초기화
+          try {
+            localStorage.removeItem('travel-planner-storage')
+          } catch (error) {
+            console.warn('로컬 스토리지 클리어 실패:', error)
+          }
+        },
         
         setGeneratedItinerary: (itinerary) => 
           set({ generatedItinerary: itinerary }),
         
         setIsGenerating: (loading) => 
           set({ isGenerating: loading }),
+        
+        setRecommendedAccommodations: (accommodations) =>
+          set({ recommendedAccommodations: accommodations }),
+        
+        setIsLoadingAccommodations: (loading) =>
+          set({ isLoadingAccommodations: loading }),
       }),
       {
         name: 'travel-planner-storage',
