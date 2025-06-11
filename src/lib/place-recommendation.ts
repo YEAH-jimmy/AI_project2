@@ -407,7 +407,7 @@ export const generateOptimizedItinerary = async (
     if (allPlaces.length === 0) {
       throw new Error('추천 장소를 찾을 수 없습니다.');
     }
-
+    
     // 2. 필수 방문 장소들을 실제 장소 정보로 변환
     let mustVisitActualPlaces: RecommendedPlace[] = [];
     if (mustVisitPlaces && mustVisitPlaces.length > 0) {
@@ -575,98 +575,98 @@ export const generateOptimizedItinerary = async (
           
         } else {
           // 예약한 숙소가 없는 경우 기존 추천 로직 사용
-          try {
-            console.log(`${day + 1}일차 마지막 일정 "${lastPlace.name}" 주변 숙소 검색 중...`);
+        try {
+          console.log(`${day + 1}일차 마지막 일정 "${lastPlace.name}" 주변 숙소 검색 중...`);
+          
+          const accommodations = await recommendAccommodationNearLastPlace(
+            {
+              name: lastPlace.name,
+              lat: lastPlace.lat,
+              lng: lastPlace.lng
+            },
+            accommodationType
+          );
+          
+          if (accommodations.length > 0) {
+            // 가장 추천하는 숙소를 체크인으로 추가
+            const bestAccommodation = accommodations[0];
             
-            const accommodations = await recommendAccommodationNearLastPlace(
-              {
-                name: lastPlace.name,
-                lat: lastPlace.lat,
-                lng: lastPlace.lng
-              },
-              accommodationType
-            );
-            
-            if (accommodations.length > 0) {
-              // 가장 추천하는 숙소를 체크인으로 추가
-              const bestAccommodation = accommodations[0];
-              
-              const checkInPlace: RecommendedPlace = {
-                id: `checkin_${day}_${bestAccommodation.id}`,
-                name: `🏨 ${bestAccommodation.name} 체크인`,
-                category: '숙소 체크인',
-                address: bestAccommodation.address,
-                lat: bestAccommodation.lat,
-                lng: bestAccommodation.lng,
-                rating: bestAccommodation.rating,
-                reviewCount: bestAccommodation.reviewCount,
+            const checkInPlace: RecommendedPlace = {
+              id: `checkin_${day}_${bestAccommodation.id}`,
+              name: `🏨 ${bestAccommodation.name} 체크인`,
+              category: '숙소 체크인',
+              address: bestAccommodation.address,
+              lat: bestAccommodation.lat,
+              lng: bestAccommodation.lng,
+              rating: bestAccommodation.rating,
+              reviewCount: bestAccommodation.reviewCount,
                 description: bestAccommodation.amenities?.slice(0, 3).join(', ') || '숙소 체크인',
-                phone: bestAccommodation.phone,
-                tags: ['숙박', '체크인', accommodationType, '추천숙소'],
-                source: 'kakao' as const,
-                suggestedVisitDuration: 30, // 체크인 시간 30분
+              phone: bestAccommodation.phone,
+              tags: ['숙박', '체크인', accommodationType, '추천숙소'],
+              source: 'kakao' as const,
+              suggestedVisitDuration: 30, // 체크인 시간 30분
                 timeSlot: 'night', // 밤 시간대로 설정
                 activityType: 'accommodation',
                 scheduledTime: '21:00', // 21시 체크인으로 설정
                 orderIndex: 999, // 가장 마지막 순서
-                // 추가 숙소 정보
-                accommodationInfo: {
-                  amenities: bestAccommodation.amenities,
-                  distance: bestAccommodation.distance,
-                  alternativeOptions: accommodations.slice(1, 3) // 대안 숙소 2개
-                }
-              };
-              
-              // 마지막 일정 다음에 체크인 추가
-              optimizedDayPlaces.push(checkInPlace);
-              
-              console.log(`${day + 1}일차 숙소 체크인 추가: ${bestAccommodation.name} (${bestAccommodation.distance?.toFixed(1)}km)`);
-            } else {
-              // 숙소를 찾지 못한 경우 기본 체크인 표시
-              const fallbackCheckIn: RecommendedPlace = {
-                id: `checkin_${day}_fallback`,
-                name: `🏨 ${destination} 지역 숙소 체크인`,
-                category: '숙소 체크인',
-                address: `${destination} 중심가`,
-                lat: lastPlace.lat,
-                lng: lastPlace.lng,
-                description: '이 지역의 숙소를 직접 검색해보세요',
-                tags: ['숙박', '체크인', accommodationType],
-                source: 'kakao' as const,
-                suggestedVisitDuration: 30,
-                timeSlot: 'night', // 밤 시간대로 설정
-                activityType: 'accommodation',
-                scheduledTime: '21:00', // 21시 체크인으로 설정
-                orderIndex: 999 // 가장 마지막 순서
-              };
-              
-              optimizedDayPlaces.push(fallbackCheckIn);
-              console.log(`${day + 1}일차 기본 체크인 표시`);
-            }
-          } catch (error) {
-            console.error(`${day + 1}일차 숙소 추천 중 오류:`, error);
+              // 추가 숙소 정보
+              accommodationInfo: {
+                amenities: bestAccommodation.amenities,
+                distance: bestAccommodation.distance,
+                alternativeOptions: accommodations.slice(1, 3) // 대안 숙소 2개
+              }
+            };
             
-            // 오류 발생 시에도 기본 체크인 정보는 표시
-            const errorCheckIn: RecommendedPlace = {
-              id: `checkin_${day}_error`,
+            // 마지막 일정 다음에 체크인 추가
+            optimizedDayPlaces.push(checkInPlace);
+            
+            console.log(`${day + 1}일차 숙소 체크인 추가: ${bestAccommodation.name} (${bestAccommodation.distance?.toFixed(1)}km)`);
+          } else {
+            // 숙소를 찾지 못한 경우 기본 체크인 표시
+            const fallbackCheckIn: RecommendedPlace = {
+              id: `checkin_${day}_fallback`,
               name: `🏨 ${destination} 지역 숙소 체크인`,
               category: '숙소 체크인',
               address: `${destination} 중심가`,
               lat: lastPlace.lat,
               lng: lastPlace.lng,
-              description: '숙소 정보를 불러올 수 없습니다. 직접 검색해보세요.',
+              description: '이 지역의 숙소를 직접 검색해보세요',
               tags: ['숙박', '체크인', accommodationType],
               source: 'kakao' as const,
+                suggestedVisitDuration: 30,
+                timeSlot: 'night', // 밤 시간대로 설정
+                activityType: 'accommodation',
+                scheduledTime: '21:00', // 21시 체크인으로 설정
+                orderIndex: 999 // 가장 마지막 순서
+            };
+            
+            optimizedDayPlaces.push(fallbackCheckIn);
+            console.log(`${day + 1}일차 기본 체크인 표시`);
+          }
+        } catch (error) {
+          console.error(`${day + 1}일차 숙소 추천 중 오류:`, error);
+          
+          // 오류 발생 시에도 기본 체크인 정보는 표시
+          const errorCheckIn: RecommendedPlace = {
+            id: `checkin_${day}_error`,
+            name: `🏨 ${destination} 지역 숙소 체크인`,
+            category: '숙소 체크인',
+            address: `${destination} 중심가`,
+            lat: lastPlace.lat,
+            lng: lastPlace.lng,
+            description: '숙소 정보를 불러올 수 없습니다. 직접 검색해보세요.',
+            tags: ['숙박', '체크인', accommodationType],
+            source: 'kakao' as const,
               suggestedVisitDuration: 30,
               timeSlot: 'night', // 밤 시간대로 설정
               activityType: 'accommodation',
               scheduledTime: '21:00', // 21시 체크인으로 설정
               orderIndex: 999 // 가장 마지막 순서
-            };
-            
-            optimizedDayPlaces.push(errorCheckIn);
-          }
+          };
+          
+          optimizedDayPlaces.push(errorCheckIn);
         }
+      }
         
         // 체크인을 포함해서 orderIndex로 다시 정렬 (체크아웃이 맨 앞, 체크인이 맨 마지막으로 이동)
         optimizedDayPlaces.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
@@ -710,23 +710,17 @@ const categorizePlacesByType = (places: RecommendedPlace[]) => {
     ),
     restaurants: places.filter(p => 
       (p.category.includes('음식점') || 
-       p.category.includes('맛집') ||
-       p.category.includes('한식') ||
-       p.category.includes('중식') ||
-       p.category.includes('일식') ||
+      p.category.includes('맛집') ||
+      p.category.includes('한식') ||
+      p.category.includes('중식') ||
+      p.category.includes('일식') ||
        p.category.includes('양식')) &&
-      // 카페와 간식 제외
+      // 카페 제외
       !p.category.includes('카페') &&
       !p.category.includes('커피') &&
       !p.category.includes('디저트') &&
-      !p.category.includes('간식') &&
-      !p.category.includes('베이커리') &&
-      !p.category.includes('도넛') &&
-      !p.category.includes('아이스크림') &&
       !p.name.toLowerCase().includes('카페') &&
-      !p.name.toLowerCase().includes('커피') &&
-      !p.name.toLowerCase().includes('베이커리') &&
-      !p.name.toLowerCase().includes('도넛')
+      !p.name.toLowerCase().includes('커피')
     ),
     cafes: places.filter(p => 
       p.category.includes('카페') || 
@@ -778,7 +772,7 @@ const generateDayItinerary = (
   
   // 시간대별 일정 템플릿 정의 (마지막 날 여부에 따라 다르게 설정)
   const scheduleTemplate = isLastDay ? [
-    // 마지막 날: 18시 출발을 고려해 15시까지만 일정 추천
+    // 마지막 날: 18시 출발을 고려하지만 모든 식사는 필수 포함
     { 
       timeSlot: 'early_morning' as const, 
       time: '08:30', 
@@ -810,8 +804,16 @@ const generateDayItinerary = (
       count: 1, 
       activityType: 'culture' as const,
       purpose: '오후 활동 (간단히)'
+    },
+    { 
+      timeSlot: 'evening' as const, 
+      time: '16:30', 
+      categories: ['restaurants'], 
+      count: 1, 
+      activityType: 'dining' as const,
+      purpose: '저녁 식사 (이른 저녁)'
     }
-    // 마지막 날은 15시까지만 일정 추천 (18시 출발 고려)
+    // 마지막 날도 저녁 식사는 포함 (18시 출발 전 이른 저녁)
   ] : [
     // 일반 날짜: 기존 일정대로
     { 
@@ -922,21 +924,15 @@ const generateDayItinerary = (
           return false;
         }
         
-        // 식사 시간대(아침, 점심, 저녁)에는 카페와 간식 제외
+        // 식사 시간대(아침, 점심, 저녁)에는 카페 제외
         if (slot.activityType === 'dining' && 
             (slot.timeSlot === 'early_morning' || slot.timeSlot === 'lunch' || slot.timeSlot === 'evening')) {
-          // "음식점 > 카페", "음식점 > 간식" 카테고리나 관련 키워드가 포함된 장소 제외
+          // "음식점 > 카페" 카테고리나 카페 관련 키워드가 포함된 장소 제외
           if (place.category.includes('카페') || 
               place.category.includes('커피') || 
               place.category.includes('디저트') ||
-              place.category.includes('간식') ||
-              place.category.includes('베이커리') ||
-              place.category.includes('도넛') ||
-              place.category.includes('아이스크림') ||
               place.name.toLowerCase().includes('카페') ||
-              place.name.toLowerCase().includes('커피') ||
-              place.name.toLowerCase().includes('베이커리') ||
-              place.name.toLowerCase().includes('도넛')) {
+              place.name.toLowerCase().includes('커피')) {
             return false;
           }
         }
@@ -948,72 +944,34 @@ const generateDayItinerary = (
         const scoreB = (b.rating || 0) * 20 + (b.matchScore || 0);
         return scoreB - scoreA;
       });
-
+    
     let selectedPlaces = filteredPlaces.slice(0, actualCount);
     
-    // 식사 시간대인데 적절한 음식점을 찾지 못한 경우 강제로 음식점 추가
-    if (slot.activityType === 'dining' && selectedPlaces.length === 0) {
-      console.warn(`${dayIndex + 1}일차 ${slot.purpose} 시간대에 적절한 음식점을 찾지 못했습니다. 대체 음식점을 추가합니다.`);
+    // 식사 시간대에 장소가 없으면 대체 식당 생성 (필수)
+    if (slot.activityType === 'dining' && 
+        (slot.timeSlot === 'early_morning' || slot.timeSlot === 'lunch' || slot.timeSlot === 'evening') &&
+        selectedPlaces.length === 0) {
       
-      // 모든 음식점에서 재검색 (카페/간식 제외하고)
-      const allRestaurants = (Object.values(categorizedPlaces) as RecommendedPlace[][])
-        .flat()
-        .filter((place: RecommendedPlace) => {
-          // 기본 필터링
-          if (usedPlaces.has(place.id) || dayPlan.some(p => p.id === place.id)) {
-            return false;
-          }
-          
-          // 음식점인지 확인하고 카페/간식 제외
-          const isRestaurant = place.category.includes('음식점') || 
-                               place.category.includes('맛집') ||
-                               place.category.includes('한식') ||
-                               place.category.includes('중식') ||
-                               place.category.includes('일식') ||
-                               place.category.includes('양식');
-          
-          const isCafeOrSnack = place.category.includes('카페') ||
-                               place.category.includes('커피') ||
-                               place.category.includes('디저트') ||
-                               place.category.includes('간식') ||
-                               place.category.includes('베이커리') ||
-                               place.category.includes('도넛') ||
-                               place.category.includes('아이스크림') ||
-                               place.name.toLowerCase().includes('카페') ||
-                               place.name.toLowerCase().includes('커피') ||
-                               place.name.toLowerCase().includes('베이커리') ||
-                               place.name.toLowerCase().includes('도넛');
-          
-          return isRestaurant && !isCafeOrSnack;
-        })
-        .sort((a: RecommendedPlace, b: RecommendedPlace) => {
-          const scoreA = (a.rating || 0) * 20 + (a.matchScore || 0);
-          const scoreB = (b.rating || 0) * 20 + (b.matchScore || 0);
-          return scoreB - scoreA;
-        });
+      console.warn(`${dayIndex + 1}일차 ${slot.purpose}에 적절한 음식점을 찾지 못해 대체 식당을 생성합니다.`);
       
-      // 최소 1개의 음식점은 추가
-      if (allRestaurants.length > 0) {
-        selectedPlaces = allRestaurants.slice(0, Math.max(1, actualCount));
-        console.log(`${dayIndex + 1}일차 ${slot.purpose}에 대체 음식점 추가: ${selectedPlaces[0].name}`);
-      } else {
-        // 정말 음식점이 없는 경우 기본 음식점 생성
-        const fallbackRestaurant: RecommendedPlace = {
-          id: `fallback_restaurant_${dayIndex}_${slot.timeSlot}`,
-          name: `${destination} 지역 ${slot.purpose.includes('아침') ? '아침식사' : slot.purpose.includes('점심') ? '점심식사' : '저녁식사'}`,
-          category: '음식점',
-          address: `${destination} 중심가`,
-          lat: 0, // 임시 좌표
-          lng: 0, // 임시 좌표
-          description: `${slot.purpose} 추천 음식점을 직접 검색해보세요`,
-          source: 'kakao' as const,
-          tags: ['음식점', '필수식사'],
-          activityType: 'dining'
-        };
-        
-        selectedPlaces = [fallbackRestaurant];
-        console.log(`${dayIndex + 1}일차 ${slot.purpose}에 기본 음식점 생성`);
-      }
+      // 기본 식당 정보 생성
+      const fallbackRestaurant: RecommendedPlace = {
+        id: `fallback_restaurant_${dayIndex}_${slot.timeSlot}`,
+        name: `${destination} 지역 ${slot.purpose === '아침 식사' ? '아침' : slot.purpose === '점심 식사' ? '점심' : '저녁'} 맛집`,
+        category: '음식점',
+        address: `${destination} 중심가`,
+        lat: categorizedPlaces.attractions[0]?.lat || 37.5665,
+        lng: categorizedPlaces.attractions[0]?.lng || 126.9780,
+        rating: 4.2,
+        reviewCount: 150,
+        description: `${destination} 지역의 인기 ${slot.purpose === '아침 식사' ? '아침' : slot.purpose === '점심 식사' ? '점심' : '저녁'} 식당`,
+        phone: '',
+        tags: ['음식점', '맛집', slot.purpose === '아침 식사' ? '아침' : slot.purpose === '점심 식사' ? '점심' : '저녁'],
+        source: 'kakao' as const,
+        suggestedVisitDuration: 90
+      };
+      
+      selectedPlaces = [fallbackRestaurant];
     }
     
     selectedPlaces.forEach((place, index) => {
@@ -1074,6 +1032,41 @@ const generateDayItinerary = (
       dayPlan.push(enhancedPlace);
     });
   }
+
+  // 식사 필수 보장 검증 (아침, 점심, 저녁)
+  const requiredMeals = ['early_morning', 'lunch', isLastDay ? 'evening' : 'evening'];
+  const currentMeals = dayPlan.filter(p => p.activityType === 'dining').map(p => p.timeSlot);
+  
+  requiredMeals.forEach((mealTime, index) => {
+    if (!currentMeals.includes(mealTime)) {
+      const mealNames = ['아침 식사', '점심 식사', '저녁 식사'];
+      const mealTimes = ['08:30', '12:30', isLastDay ? '16:30' : '18:30'];
+      
+      console.warn(`${dayIndex + 1}일차 ${mealNames[index]}가 누락되어 추가합니다.`);
+      
+      const emergencyMeal: RecommendedPlace = {
+        id: `emergency_meal_${dayIndex}_${mealTime}`,
+        name: `${destination} ${mealNames[index]} 맛집`,
+        category: '음식점',
+        address: `${destination} 중심가`,
+        lat: dayPlan[0]?.lat || 37.5665,
+        lng: dayPlan[0]?.lng || 126.9780,
+        rating: 4.0,
+        reviewCount: 100,
+        description: `${destination} 지역 ${mealNames[index]} 식당`,
+        phone: '',
+        tags: ['음식점', '필수식사'],
+        source: 'kakao' as const,
+        suggestedVisitDuration: 90,
+        timeSlot: mealTime as any,
+        activityType: 'dining',
+        scheduledTime: mealTimes[index],
+        orderIndex: mealTime === 'early_morning' ? 1 : mealTime === 'lunch' ? 50 : 90
+      };
+      
+      dayPlan.push(emergencyMeal);
+    }
+  });
 
   // orderIndex 순으로 정렬
   const sortedDayPlan = dayPlan.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
