@@ -1210,7 +1210,7 @@ export function ResultStep() {
                                 <div className="space-y-3">
                                   {dayItinerary.map((item, itemIndex) => (
                                     <div key={itemIndex} className="space-y-2">
-                                      {/* 이동시간 정보 표시 (첫 번째가 아닌 경우) */}
+                                      {/* 이동시간 정보 표시 (첫 번째가 아닌 경우이고, 이동시간이 0이 아닌 경우) */}
                                       {itemIndex > 0 && (
                                         <div className="space-y-1">
                                           {(() => {
@@ -1255,96 +1255,111 @@ export function ResultStep() {
                                             }
                                             
                                             if (selectedTransportType === 'driving') {
-                                              // 자동차/자차 선택시 → 자차 정보만 표시
-                                              return (
-                                                <div className="flex items-center gap-2 ml-8 text-sm text-gray-500 bg-blue-50 rounded-lg px-3 py-2">
-                                                  <Navigation className="w-4 h-4 text-blue-500" />
-                                                  <span>이동시간: {drivingTime}분</span>
-                                                  <span className="text-gray-400">•</span>
-                                                  <span>거리: {distance.toFixed(1)}km</span>
-                                                  <span className="text-gray-400">•</span>
-                                                  <span>예상비용: {drivingCost.toLocaleString()}원</span>
-                                                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full ml-auto">
-                                                    🚗 자차
-                                                  </span>
-                                                </div>
-                                              );
-                                            } else if (selectedTransportType === 'transit') {
-                                              // 대중교통 선택시 → 대중교통 + 도보 (1km 미만일 때만 도보 표시)
-                                              return (
-                                                <>
-                                                  <div className="flex items-center gap-2 ml-8 text-sm text-gray-500 bg-purple-50 rounded-lg px-3 py-2">
-                                                    <Navigation className="w-4 h-4 text-purple-500" />
-                                                    <span>대중교통: {Math.ceil(drivingTime * 1.8)}분</span>
+                                              // 자동차/자차 선택시 → 자차 정보만 표시 (단, 이동시간이 0이 아닌 경우에만)
+                                              if (drivingTime > 0 && distance > 0) {
+                                                return (
+                                                  <div className="flex items-center gap-2 ml-8 text-sm text-gray-500 bg-blue-50 rounded-lg px-3 py-2">
+                                                    <Navigation className="w-4 h-4 text-blue-500" />
+                                                    <span>이동시간: {drivingTime}분</span>
                                                     <span className="text-gray-400">•</span>
-                                                    <span>{distance.toFixed(1)}km</span>
+                                                    <span>거리: {distance.toFixed(1)}km</span>
                                                     <span className="text-gray-400">•</span>
-                                                    <span>{transitCost.toLocaleString()}원</span>
-                                                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full ml-auto">
-                                                      🚌 대중교통
+                                                    <span>예상비용: {drivingCost.toLocaleString()}원</span>
+                                                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full ml-auto">
+                                                      🚗 자차
                                                     </span>
                                                   </div>
-                                                  {/* 1km 미만일 때만 도보 정보 표시 */}
-                                                  {distance < 1.0 && (
-                                                    <div className="flex items-center gap-2 ml-8 text-sm text-gray-500 bg-green-50 rounded-lg px-3 py-2">
-                                                      <Navigation className="w-4 h-4 text-green-500" />
-                                                      <span>도보: {walkingTime}분</span>
+                                                );
+                                              }
+                                              return null;
+                                            } else if (selectedTransportType === 'transit') {
+                                              // 대중교통 선택시 → 대중교통 + 도보 (이동시간이 0이 아닌 경우에만)
+                                              if (drivingTime > 0 && distance > 0) {
+                                                return (
+                                                  <>
+                                                    <div className="flex items-center gap-2 ml-8 text-sm text-gray-500 bg-purple-50 rounded-lg px-3 py-2">
+                                                      <Navigation className="w-4 h-4 text-purple-500" />
+                                                      <span>대중교통: {Math.ceil(drivingTime * 1.8)}분</span>
                                                       <span className="text-gray-400">•</span>
                                                       <span>{distance.toFixed(1)}km</span>
                                                       <span className="text-gray-400">•</span>
-                                                      <span>무료</span>
-                                                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full ml-auto">
-                                                        🚶 도보
+                                                      <span>{transitCost.toLocaleString()}원</span>
+                                                      <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full ml-auto">
+                                                        🚌 대중교통
                                                       </span>
                                                     </div>
-                                                  )}
-                                                </>
-                                              );
+                                                    {/* 1km 미만일 때만 도보 정보 표시 */}
+                                                    {distance < 1.0 && walkingTime > 0 && (
+                                                      <div className="flex items-center gap-2 ml-8 text-sm text-gray-500 bg-green-50 rounded-lg px-3 py-2">
+                                                        <Navigation className="w-4 h-4 text-green-500" />
+                                                        <span>도보: {walkingTime}분</span>
+                                                        <span className="text-gray-400">•</span>
+                                                        <span>{distance.toFixed(1)}km</span>
+                                                        <span className="text-gray-400">•</span>
+                                                        <span>무료</span>
+                                                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full ml-auto">
+                                                          🚶 도보
+                                                        </span>
+                                                      </div>
+                                                    )}
+                                                  </>
+                                                );
+                                              }
+                                              return null;
                                             } else if (selectedTransportType === 'walking') {
-                                              // 도보 선택시 → 도보 정보만 표시
-                                              return (
-                                                <div className="flex items-center gap-2 ml-8 text-sm text-gray-500 bg-green-50 rounded-lg px-3 py-2">
-                                                  <Navigation className="w-4 h-4 text-green-500" />
-                                                  <span>이동시간: {walkingTime}분</span>
-                                                  <span className="text-gray-400">•</span>
-                                                  <span>거리: {distance.toFixed(1)}km</span>
-                                                  <span className="text-gray-400">•</span>
-                                                  <span>무료</span>
-                                                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full ml-auto">
-                                                    🚶 도보
-                                                  </span>
-                                                </div>
-                                              );
+                                              // 도보 선택시 → 도보 정보만 표시 (이동시간이 0이 아닌 경우에만)
+                                              if (walkingTime > 0 && distance > 0) {
+                                                return (
+                                                  <div className="flex items-center gap-2 ml-8 text-sm text-gray-500 bg-green-50 rounded-lg px-3 py-2">
+                                                    <Navigation className="w-4 h-4 text-green-500" />
+                                                    <span>이동시간: {walkingTime}분</span>
+                                                    <span className="text-gray-400">•</span>
+                                                    <span>거리: {distance.toFixed(1)}km</span>
+                                                    <span className="text-gray-400">•</span>
+                                                    <span>무료</span>
+                                                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full ml-auto">
+                                                      🚶 도보
+                                                    </span>
+                                                  </div>
+                                                );
+                                              }
+                                              return null;
                                             } else if (selectedTransportType === 'bicycle') {
-                                              // 자전거 선택시 → 자전거 이동시간 표시
-                                              return (
-                                                <div className="flex items-center gap-2 ml-8 text-sm text-gray-500 bg-orange-50 rounded-lg px-3 py-2">
-                                                  <Navigation className="w-4 h-4 text-orange-500" />
-                                                  <span>이동시간: {bicycleTime}분</span>
-                                                  <span className="text-gray-400">•</span>
-                                                  <span>거리: {distance.toFixed(1)}km</span>
-                                                  <span className="text-gray-400">•</span>
-                                                  <span>무료</span>
-                                                  <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full ml-auto">
-                                                    🚴 자전거
-                                                  </span>
-                                                </div>
-                                              );
+                                              // 자전거 선택시 → 자전거 이동시간 표시 (이동시간이 0이 아닌 경우에만)
+                                              if (bicycleTime > 0 && distance > 0) {
+                                                return (
+                                                  <div className="flex items-center gap-2 ml-8 text-sm text-gray-500 bg-orange-50 rounded-lg px-3 py-2">
+                                                    <Navigation className="w-4 h-4 text-orange-500" />
+                                                    <span>이동시간: {bicycleTime}분</span>
+                                                    <span className="text-gray-400">•</span>
+                                                    <span>거리: {distance.toFixed(1)}km</span>
+                                                    <span className="text-gray-400">•</span>
+                                                    <span>무료</span>
+                                                    <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full ml-auto">
+                                                      🚴 자전거
+                                                    </span>
+                                                  </div>
+                                                );
+                                              }
+                                              return null;
                                             } else {
-                                              // 기타 선택시 → 택시 요금으로 표시
-                                              return (
-                                                <div className="flex items-center gap-2 ml-8 text-sm text-gray-500 bg-yellow-50 rounded-lg px-3 py-2">
-                                                  <Navigation className="w-4 h-4 text-yellow-600" />
-                                                  <span>택시: {Math.ceil(drivingTime * 0.9)}분</span>
-                                                  <span className="text-gray-400">•</span>
-                                                  <span>거리: {distance.toFixed(1)}km</span>
-                                                  <span className="text-gray-400">•</span>
-                                                  <span>요금: {taxiCost.toLocaleString()}원</span>
-                                                  <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full ml-auto">
-                                                    🚕 택시
-                                                  </span>
-                                                </div>
-                                              );
+                                              // 기타 선택시 → 택시 요금으로 표시 (이동시간이 0이 아닌 경우에만)
+                                              if (drivingTime > 0 && distance > 0) {
+                                                return (
+                                                  <div className="flex items-center gap-2 ml-8 text-sm text-gray-500 bg-yellow-50 rounded-lg px-3 py-2">
+                                                    <Navigation className="w-4 h-4 text-yellow-600" />
+                                                    <span>택시: {Math.ceil(drivingTime * 0.9)}분</span>
+                                                    <span className="text-gray-400">•</span>
+                                                    <span>거리: {distance.toFixed(1)}km</span>
+                                                    <span className="text-gray-400">•</span>
+                                                    <span>요금: {taxiCost.toLocaleString()}원</span>
+                                                    <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full ml-auto">
+                                                      🚕 택시
+                                                    </span>
+                                                  </div>
+                                                );
+                                              }
+                                              return null;
                                             }
                                           })()}
                                         </div>
