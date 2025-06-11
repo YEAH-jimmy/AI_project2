@@ -340,16 +340,6 @@ export function TransportStep() {
           </CardContent>
         </Card>
       </div>
-
-      <div className="text-center">
-        <Button 
-          variant="ghost" 
-          size="sm"
-          className="text-blue-600 hover:text-blue-700"
-        >
-          처음부터 다시 시작하기
-        </Button>
-      </div>
     </div>
   )
 } 
