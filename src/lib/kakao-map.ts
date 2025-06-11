@@ -699,6 +699,18 @@ const TRANSPORT_KEYWORDS = {
   bus: ['터미널', '버스터미널', '시외버스']
 };
 
+// 역명 매핑 테이블 (정확한 역명으로 매핑)
+const STATION_NAME_MAPPING = {
+  '경주': '신경주역', // KTX는 신경주역
+  '구미': '김천구미역', // KTX는 김천구미역  
+  '여수': '여수엑스포역', // KTX는 여수엑스포역
+  '광주': '광주송정역', // KTX는 광주송정역
+  '천안': '천안아산역', // KTX는 천안아산역
+  '아산': '천안아산역', // KTX는 천안아산역
+  '울산': '울산역', // KTX는 울산역
+  '부산': '부산역', // KTX는 부산역 (신부산역 아님)
+};
+
 // 교통시설이 없는 것으로 알려진 도시들
 const CITIES_WITHOUT_FACILITIES = {
   airplane: [
@@ -708,18 +720,20 @@ const CITIES_WITHOUT_FACILITIES = {
     '수원', '성남', '의정부', '안양', '부천', '광명', '평택', '동두천', '안산', '고양', '과천', '구리', '남양주', '오산', '시흥', '군포', '의왕', '하남', '용인', '파주', '이천', '안성', '김포', '화성', '광주', '양주', '포천', '여주', '연천', '가평', '양평', // 경기도
     '청주', '충주', '제천', '보은', '옥천', '영동', '진천', '괴산', '음성', '단양', '증평', // 충청북도
     '포항', '경주', '김천', '안동', '구미', '영주', '영천', '상주', '문경', '경산', '군위', '의성', '청송', '영양', '영덕', '청도', '고령', '성주', '칠곡', '예천', '봉화', '울진', '울릉', // 경상북도
-    '창원', '마산', '진해', '진주', '통영', '사천', '김해', '밀양', '거제', '양산', '의령', '함안', '창녕', '고성', '남해', '하동', '산청', '함양', '거창', '합천', // 경상남도  
+    '창원', '마산', '진해', '진주', '통영', '김해', '밀양', '거제', '양산', '의령', '함안', '창녕', '고성', '남해', '하동', '산청', '함양', '거창', '합천', // 경상남도  
     '순천', '나주', '광양', '담양', '곡성', '구례', '고흥', '보성', '화순', '장흥', '강진', '해남', '영암', '무안', '함평', '영광', '장성', '완도', '진도', '신안', // 전라남도
-    '안동', '문경', '상주', // 추가 경상북도
+    '울산', // 울산광역시 - 공항 없음
   ],
   ktx: [
-    '속초', '강릉', '동해', '삼척', // 강원 동해안
-    '포항', '경주', // 경북 동해안  
+    '속초', '동해', '삼척', // 강원 동해안
+    '포항', // 경북 동해안  
     '통영', '거제', '남해', '하동', // 경남 남해안
     '완도', '진도', '신안', '고흥', '보성', // 전남 남해안
     '서산', '태안', '보령', // 충남 서해안
-    '군산', '정읍', '남원', // 전북 내륙
+    '군산', '남원', // 전북 내륙 (정읍은 KTX 있음)
     '제천', '단양', '영월', '정선', // 산간지역
+    '춘천', '원주', // 강원도 내륙
+    '진주', // 경남 내륙
   ],
   train: [
     // 기차역이 없는 소규모 군 단위 지역들
@@ -778,7 +792,15 @@ export const validateTransportFacility = async (
     }
 
     const keywords = TRANSPORT_KEYWORDS[transportType];
-    const searchQuery = `${destination} ${keywords[0]}`;
+    
+    // 역명 매핑 적용 (특히 KTX의 경우)
+    let searchDestination = destination;
+    if (transportType === 'ktx' && STATION_NAME_MAPPING[destination]) {
+      searchDestination = STATION_NAME_MAPPING[destination];
+      console.log(`🔄 역명 매핑: ${destination} → ${searchDestination}`);
+    }
+    
+    const searchQuery = `${searchDestination} ${keywords[0]}`;
     
     console.log(`🔍 교통시설 검증: ${searchQuery}`);
     
@@ -824,12 +846,27 @@ export const validateTransportFacility = async (
                  !placeName.includes('오피스텔') &&
                  !placeName.includes('펜션') &&
                  !placeName.includes('호텔') &&
-                 !placeName.includes('모텔');
+                 !placeName.includes('모텔') &&
+                 !placeName.includes('상가') &&
+                 !placeName.includes('쇼핑') &&
+                 !placeName.includes('세권') &&
+                 !placeName.includes('타워') &&
+                 !placeName.includes('센터') &&
+                 !placeName.includes('프라자') &&
+                 !placeName.includes('마트') &&
+                 !placeName.includes('점포') &&
+                 !placeName.includes('상점');
           
           // 실제 KTX역 목록과 비교
           const matchesActualStation = ACTUAL_KTX_STATIONS.some(station => 
             placeName.includes(station.toLowerCase()) || 
-            (destinationLower === '전주' && placeName.includes('전주역'))
+            (destinationLower === '전주' && placeName.includes('전주역')) ||
+            (destinationLower === '경주' && placeName.includes('신경주역')) ||
+            (destinationLower === '구미' && placeName.includes('김천구미역')) ||
+            (destinationLower === '여수' && placeName.includes('여수엑스포역')) ||
+            (destinationLower === '광주' && placeName.includes('광주송정역')) ||
+            (destinationLower === '천안' && placeName.includes('천안아산역')) ||
+            (destinationLower === '아산' && placeName.includes('천안아산역'))
           );
           
           return isValidStation && matchesActualStation;
@@ -841,7 +878,20 @@ export const validateTransportFacility = async (
                  !placeName.includes('병원') &&
                  !placeName.includes('주차장') &&
                  !placeName.includes('카페') &&
-                 !placeName.includes('식당');
+                 !placeName.includes('식당') &&
+                 !placeName.includes('빌딩') &&
+                 !placeName.includes('오피스텔') &&
+                 !placeName.includes('펜션') &&
+                 !placeName.includes('호텔') &&
+                 !placeName.includes('모텔') &&
+                 !placeName.includes('상가') &&
+                 !placeName.includes('쇼핑') &&
+                 !placeName.includes('세권') &&
+                 !placeName.includes('타워') &&
+                 !placeName.includes('센터') &&
+                 !placeName.includes('프라자') &&
+                 !placeName.includes('점포') &&
+                 !placeName.includes('상점');
           
           // 실제 기차역 목록과 비교
           const matchesActualStation = ACTUAL_TRAIN_STATIONS.some(station => 
@@ -857,7 +907,20 @@ export const validateTransportFacility = async (
                  !placeName.includes('병원') &&
                  !placeName.includes('주차장') &&
                  !placeName.includes('카페') &&
-                 !placeName.includes('식당');
+                 !placeName.includes('식당') &&
+                 !placeName.includes('빌딩') &&
+                 !placeName.includes('오피스텔') &&
+                 !placeName.includes('펜션') &&
+                 !placeName.includes('호텔') &&
+                 !placeName.includes('모텔') &&
+                 !placeName.includes('상가') &&
+                 !placeName.includes('쇼핑') &&
+                 !placeName.includes('세권') &&
+                 !placeName.includes('타워') &&
+                 !placeName.includes('센터') &&
+                 !placeName.includes('프라자') &&
+                 !placeName.includes('점포') &&
+                 !placeName.includes('상점');
         }
         return true;
       })();
