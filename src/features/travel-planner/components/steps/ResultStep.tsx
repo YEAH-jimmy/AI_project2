@@ -1025,13 +1025,20 @@ export function ResultStep() {
                                 }
                               };
                               
-                              let defaultItinerary = itineraries[destination]?.[day] || [
+                              let defaultItinerary = itineraries[destination]?.[day] || (isLastDay ? [
+                                // 마지막 날: 15시까지만 일정 (18시 출발 고려)
+                                { time: '09:00', activity: '호텔 조식 및 체크아웃', location: '숙소', type: 'accommodation' },
+                                { time: '10:30', activity: `${destination} 주요 관광지 방문`, location: destination, type: 'attraction' },
+                                { time: '12:30', activity: '현지 맛집에서 점심', location: `${destination} 맛집`, type: 'food' },
+                                { time: '14:00', activity: '마지막 여행지 관광 (간단히)', location: `${destination} 명소`, type: 'attraction' }
+                              ] : [
+                                // 일반 날짜: 기존 일정
                                 { time: '09:00', activity: '호텔 조식 및 체크아웃', location: '숙소', type: 'accommodation' },
                                 { time: '10:30', activity: `${destination} 주요 관광지 방문`, location: destination, type: 'attraction' },
                                 { time: '12:30', activity: '현지 맛집에서 점심', location: `${destination} 맛집`, type: 'food' },
                                 { time: '14:00', activity: '문화 체험 및 쇼핑', location: `${destination} 쇼핑가`, type: 'shopping' },
                                 { time: '18:00', activity: '저녁 식사 및 야경 감상', location: `${destination} 야경 명소`, type: 'food' }
-                              ];
+                              ]);
                               
                               // 기본 일정에도 교통편 및 숙소 추가
                               if (transportPoint) {
@@ -1045,7 +1052,7 @@ export function ResultStep() {
                                   });
                                   
                                   defaultItinerary.push({
-                                    time: '20:00',
+                                    time: '21:00',
                                     activity: '숙소 체크인',
                                     location: `${planData.destination} 숙소`,
                                     type: 'accommodation',
@@ -1053,7 +1060,7 @@ export function ResultStep() {
                                   });
                                 } else if (isLastDay) {
                                   defaultItinerary.unshift({
-                                    time: '09:00',
+                                    time: '08:00',
                                     activity: '숙소 체크아웃',
                                     location: `${planData.destination} 숙소`,
                                     type: 'accommodation',
@@ -1069,7 +1076,7 @@ export function ResultStep() {
                                   });
                                 } else {
                                   defaultItinerary.unshift({
-                                    time: '09:00',
+                                    time: '08:00',
                                     activity: '숙소 체크아웃',
                                     location: `${planData.destination} 숙소`,
                                     type: 'accommodation',
@@ -1077,7 +1084,7 @@ export function ResultStep() {
                                   });
                                   
                                   defaultItinerary.push({
-                                    time: '20:00',
+                                    time: '21:00',
                                     activity: '숙소 체크인',
                                     location: `${planData.destination} 숙소`,
                                     type: 'accommodation',
@@ -1087,7 +1094,7 @@ export function ResultStep() {
                               } else {
                                 if (isFirstDay) {
                                   defaultItinerary.push({
-                                    time: '20:00',
+                                    time: '21:00',
                                     activity: '숙소 체크인',
                                     location: `${planData.destination} 숙소`,
                                     type: 'accommodation',
@@ -1095,7 +1102,7 @@ export function ResultStep() {
                                   });
                                 } else if (isLastDay) {
                                   defaultItinerary.unshift({
-                                    time: '09:00',
+                                    time: '08:00',
                                     activity: '숙소 체크아웃',
                                     location: `${planData.destination} 숙소`,
                                     type: 'accommodation',
@@ -1103,7 +1110,7 @@ export function ResultStep() {
                                   });
                                 } else {
                                   defaultItinerary.unshift({
-                                    time: '09:00',
+                                    time: '08:00',
                                     activity: '숙소 체크아웃',
                                     location: `${planData.destination} 숙소`,
                                     type: 'accommodation',
@@ -1111,7 +1118,7 @@ export function ResultStep() {
                                   });
                                   
                                   defaultItinerary.push({
-                                    time: '20:00',
+                                    time: '21:00',
                                     activity: '숙소 체크인',
                                     location: `${planData.destination} 숙소`,
                                     type: 'accommodation',

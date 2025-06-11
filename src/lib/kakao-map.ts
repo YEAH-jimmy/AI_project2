@@ -1228,19 +1228,9 @@ const calculateAccommodationScore = (accommodation: AccommodationInfo): number =
   return Math.round(score * 10) / 10;
 };
 
-// 가격대 시뮬레이션
+// 가격대 시뮬레이션 (사용하지 않음 - 하드코딩된 데이터이므로 제거)
 const generatePriceRange = (place: KakaoPlace, accommodationType: string): string => {
-  const priceRanges: { [key: string]: string[] } = {
-    'hotel': ['150,000-300,000원', '80,000-150,000원', '50,000-100,000원'],
-    'resort': ['200,000-500,000원', '150,000-300,000원', '100,000-200,000원'],
-    'guesthouse': ['30,000-80,000원', '20,000-50,000원', '15,000-30,000원'],
-    'airbnb': ['60,000-120,000원', '40,000-80,000원', '30,000-60,000원'],
-    'other': ['40,000-80,000원', '25,000-50,000원', '20,000-40,000원']
-  };
-  
-  const ranges = priceRanges[accommodationType] || priceRanges['hotel'];
-  const index = Math.floor(Math.random() * ranges.length);
-  return ranges[index];
+  return ''; // 빈 문자열 반환
 };
 
 // 편의시설 시뮬레이션

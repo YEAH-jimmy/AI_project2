@@ -44,7 +44,6 @@ export interface RecommendedPlace {
   suggestedVisitDuration?: number // 권장 방문 시간 (분)
   // 숙소 관련 정보 추가
   accommodationInfo?: {
-    priceRange?: string
     amenities?: string[]
     distance?: number
     alternativeOptions?: AccommodationInfo[]
@@ -473,7 +472,8 @@ export const generateOptimizedItinerary = async (
         preferences,
         destination,
         day,
-        mustVisitActualPlaces // 필수 방문 장소 정보 전달
+        mustVisitActualPlaces,
+        day === days - 1
       );
       
       // 4. 이동시간을 고려한 경로 최적화 적용
@@ -507,11 +507,15 @@ export const generateOptimizedItinerary = async (
               tags: ['숙박', '체크아웃', accommodationType],
               source: 'kakao' as const,
               suggestedVisitDuration: 20, // 체크아웃 시간 20분
+              timeSlot: 'early_morning', // 이른 아침 시간대로 설정
+              activityType: 'accommodation',
+              scheduledTime: '08:00', // 08시 체크아웃으로 설정
+              orderIndex: -10, // 가장 앞 순서 (음수로 설정)
               accommodationInfo: previousCheckIn.accommodationInfo
             };
             
-            // 하루 일정 맨 앞에 체크아웃 추가
-            optimizedDayPlaces.unshift(checkOutPlace);
+            // 체크아웃을 일정에 추가 (orderIndex로 정렬하므로 위치는 나중에 결정됨)
+            optimizedDayPlaces.push(checkOutPlace);
             console.log(`${day + 1}일차 체크아웃 추가: ${checkOutPlace.name}`);
           }
         }
@@ -555,8 +559,11 @@ export const generateOptimizedItinerary = async (
             tags: ['숙박', '체크인', accommodationType, '예약숙소'],
             source: 'kakao' as const,
             suggestedVisitDuration: 30, // 체크인 시간 30분
+            timeSlot: 'night', // 밤 시간대로 설정
+            activityType: 'accommodation',
+            scheduledTime: '21:00', // 21시 체크인으로 설정
+            orderIndex: 999, // 가장 마지막 순서
             accommodationInfo: {
-              priceRange: '예약완료',
               amenities: ['예약된 숙소'],
               distance: 0,
               alternativeOptions: []
@@ -593,14 +600,17 @@ export const generateOptimizedItinerary = async (
                 lng: bestAccommodation.lng,
                 rating: bestAccommodation.rating,
                 reviewCount: bestAccommodation.reviewCount,
-                description: `${bestAccommodation.priceRange} | ${bestAccommodation.amenities?.slice(0, 3).join(', ')}`,
+                description: bestAccommodation.amenities?.slice(0, 3).join(', ') || '숙소 체크인',
                 phone: bestAccommodation.phone,
                 tags: ['숙박', '체크인', accommodationType, '추천숙소'],
                 source: 'kakao' as const,
                 suggestedVisitDuration: 30, // 체크인 시간 30분
+                timeSlot: 'night', // 밤 시간대로 설정
+                activityType: 'accommodation',
+                scheduledTime: '21:00', // 21시 체크인으로 설정
+                orderIndex: 999, // 가장 마지막 순서
                 // 추가 숙소 정보
                 accommodationInfo: {
-                  priceRange: bestAccommodation.priceRange,
                   amenities: bestAccommodation.amenities,
                   distance: bestAccommodation.distance,
                   alternativeOptions: accommodations.slice(1, 3) // 대안 숙소 2개
@@ -623,7 +633,11 @@ export const generateOptimizedItinerary = async (
                 description: '이 지역의 숙소를 직접 검색해보세요',
                 tags: ['숙박', '체크인', accommodationType],
                 source: 'kakao' as const,
-                suggestedVisitDuration: 30
+                suggestedVisitDuration: 30,
+                timeSlot: 'night', // 밤 시간대로 설정
+                activityType: 'accommodation',
+                scheduledTime: '21:00', // 21시 체크인으로 설정
+                orderIndex: 999 // 가장 마지막 순서
               };
               
               optimizedDayPlaces.push(fallbackCheckIn);
@@ -643,16 +657,27 @@ export const generateOptimizedItinerary = async (
               description: '숙소 정보를 불러올 수 없습니다. 직접 검색해보세요.',
               tags: ['숙박', '체크인', accommodationType],
               source: 'kakao' as const,
-              suggestedVisitDuration: 30
+              suggestedVisitDuration: 30,
+              timeSlot: 'night', // 밤 시간대로 설정
+              activityType: 'accommodation',
+              scheduledTime: '21:00', // 21시 체크인으로 설정
+              orderIndex: 999 // 가장 마지막 순서
             };
             
             optimizedDayPlaces.push(errorCheckIn);
           }
         }
+        
+        // 체크인을 포함해서 orderIndex로 다시 정렬 (체크아웃이 맨 앞, 체크인이 맨 마지막으로 이동)
+        optimizedDayPlaces.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+        
       } else if (day === days - 1) {
         // 마지막 날인 경우 체크인 생략
         console.log(`${day + 1}일차 (마지막 날): 숙소 체크인 생략 - 집으로 돌아가는 날`);
       }
+      
+      // 체크아웃과 체크인을 포함해서 최종 orderIndex로 정렬
+      optimizedDayPlaces.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
       
       itinerary[day] = optimizedDayPlaces;
       
@@ -724,7 +749,8 @@ const generateDayItinerary = (
   preferences: string[],
   destination: string,
   dayIndex: number,
-  mustVisitPlaces: RecommendedPlace[]
+  mustVisitPlaces: RecommendedPlace[],
+  isLastDay: boolean = false
 ): RecommendedPlace[] => {
   const dayPlan: RecommendedPlace[] = [];
   
@@ -738,8 +764,44 @@ const generateDayItinerary = (
   
   console.log(`${dayIndex + 1}일차 필수 방문 장소:`, mustVisitForToday.map(p => p.name));
   
-  // 시간대별 일정 템플릿 정의
-  const scheduleTemplate = [
+  // 시간대별 일정 템플릿 정의 (마지막 날 여부에 따라 다르게 설정)
+  const scheduleTemplate = isLastDay ? [
+    // 마지막 날: 18시 출발을 고려해 15시까지만 일정 추천
+    { 
+      timeSlot: 'early_morning' as const, 
+      time: '08:30', 
+      categories: ['restaurants'], 
+      count: 1, 
+      activityType: 'dining' as const,
+      purpose: '아침 식사'
+    },
+    { 
+      timeSlot: 'morning' as const, 
+      time: '10:00', 
+      categories: ['attractions'], 
+      count: 2, 
+      activityType: 'attraction' as const,
+      purpose: '오전 관광'
+    },
+    { 
+      timeSlot: 'lunch' as const, 
+      time: '12:30', 
+      categories: ['restaurants'], 
+      count: 1, 
+      activityType: 'dining' as const,
+      purpose: '점심 식사'
+    },
+    { 
+      timeSlot: 'afternoon' as const, 
+      time: '14:00', 
+      categories: ['culture', 'shopping', 'attractions'], 
+      count: 1, 
+      activityType: 'culture' as const,
+      purpose: '오후 활동 (간단히)'
+    }
+    // 마지막 날은 15시까지만 일정 추천 (18시 출발 고려)
+  ] : [
+    // 일반 날짜: 기존 일정대로
     { 
       timeSlot: 'early_morning' as const, 
       time: '08:30', 
@@ -804,7 +866,7 @@ const generateDayItinerary = (
   mustVisitForToday.forEach((place, index) => {
     // 필수 방문 장소는 오전/오후에 우선 배치
     const timeSlot = index === 0 ? 'morning' : 'afternoon';
-    const scheduledTime = index === 0 ? '09:30' : '15:00';
+    const scheduledTime = index === 0 ? '09:30' : isLastDay ? '13:30' : '15:00'; // 마지막 날은 13:30으로 조정
     
     const enhancedPlace: RecommendedPlace = {
       ...place,
@@ -820,7 +882,8 @@ const generateDayItinerary = (
 
   // 시간대별로 일정 채우기
   scheduleTemplate.forEach(slot => {
-    if (dayPlan.length >= 8) return; // 최대 8개 제한
+    const maxItems = isLastDay ? 5 : 8; // 마지막 날은 최대 5개로 제한
+    if (dayPlan.length >= maxItems) return;
     
     // 해당 시간대에 이미 필수 방문 장소가 있는지 확인
     const hasRequiredPlace = dayPlan.some(place => 
@@ -875,8 +938,9 @@ const generateDayItinerary = (
     });
   });
 
-  // 부족한 경우 추가 장소로 채우기
-  if (dayPlan.length < 8) {
+  // 부족한 경우 추가 장소로 채우기 (마지막 날은 15시 이전 시간으로만 제한)
+  const maxItems = isLastDay ? 5 : 8;
+  if (dayPlan.length < maxItems) {
     const allAvailable = (Object.values(categorizedPlaces) as RecommendedPlace[][])
       .flat()
       .filter((place: RecommendedPlace) => 
@@ -889,17 +953,22 @@ const generateDayItinerary = (
         return scoreB - scoreA;
       });
     
-    const needed = 8 - dayPlan.length;
+    const needed = maxItems - dayPlan.length;
     const additionalPlaces = allAvailable.slice(0, needed);
     
     additionalPlaces.forEach((place, index) => {
+      // 마지막 날은 15시 이전 시간으로만 추가
+      const timeSlot = isLastDay ? 'afternoon' : 'afternoon';
+      const scheduledTime = isLastDay ? `${14 + (index * 0.5)}:${(index % 2) * 30}`.split('.')[0] + ':' + (index % 2 === 0 ? '00' : '30') 
+                                     : `${17 + index}:00`;
+      
       const enhancedPlace: RecommendedPlace = {
         ...place,
-        timeSlot: 'afternoon',
+        timeSlot,
         activityType: 'attraction',
-        scheduledTime: `${17 + index}:00`,
+        scheduledTime,
         orderIndex: orderIndex++,
-        description: `${place.description || place.category} | 추가 활동`
+        description: `${place.description || place.category} | ${isLastDay ? '출발전 마지막 활동' : '추가 활동'}`
       };
       
       dayPlan.push(enhancedPlace);
@@ -912,7 +981,7 @@ const generateDayItinerary = (
   console.log(`${dayIndex + 1}일차 최종 일정 (${sortedDayPlan.length}개):`, 
     sortedDayPlan.map(p => `${p.scheduledTime} ${p.name} (${p.timeSlot})`));
   
-  return sortedDayPlan.slice(0, 8);
+  return sortedDayPlan.slice(0, maxItems);
 };
 
 // 이동시간을 고려한 하루 경로 최적화
