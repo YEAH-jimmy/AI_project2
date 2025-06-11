@@ -1365,20 +1365,44 @@ export function ResultStep() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0 h-full">
-                <div className="relative bg-gray-100 rounded-b-lg overflow-hidden h-full">
-                  <KakaoMap
-                    center={mapCenter}
-                    markers={mapMarkers}
-                    height="100%"
-                    level={mapLevel}
-                    className="w-full h-full"
-                  />
-                  <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm rounded px-3 py-2 shadow-lg">
-                    <p className="text-xs text-gray-700">
-                      💡 지도의 마커를 클릭하면 장소명을 확인할 수 있습니다.
-                    </p>
+                {showMap ? (
+                  <div className="relative bg-gray-100 rounded-b-lg overflow-hidden h-full">
+                    <KakaoMap
+                      center={mapCenter}
+                      markers={mapMarkers}
+                      height="100%"
+                      level={mapLevel}
+                      className="w-full h-full"
+                    />
+                    <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm rounded px-3 py-2 shadow-lg">
+                      <p className="text-xs text-gray-700">
+                        💡 지도의 마커를 클릭하면 장소명을 확인할 수 있습니다.
+                      </p>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-center justify-center h-full bg-gray-50 rounded-b-lg">
+                    <div className="text-center space-y-4">
+                      <div className="w-20 h-20 mx-auto bg-gray-200 rounded-full flex items-center justify-center">
+                        <Map className="w-10 h-10 text-gray-400" />
+                      </div>
+                      <div>
+                        <h4 className="text-lg font-medium text-gray-600 mb-2">지도가 숨겨져 있습니다</h4>
+                        <p className="text-sm text-gray-500 mb-4">
+                          '지도 보기' 버튼을 클릭하면 여행 경로를 지도에서 확인할 수 있습니다.
+                        </p>
+                        <Button 
+                          variant="outline" 
+                          onClick={() => setShowMap(true)}
+                          className="flex items-center gap-2"
+                        >
+                          <Map className="w-4 h-4" />
+                          지도 보기
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
