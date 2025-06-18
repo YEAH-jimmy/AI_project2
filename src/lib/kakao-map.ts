@@ -711,6 +711,13 @@ const STATION_NAME_MAPPING = {
   '부산': '부산역', // KTX는 부산역 (신부산역 아님)
 };
 
+// 실제 일반열차역 목록 (주요역들)
+const ACTUAL_TRAIN_STATIONS = [
+  '서울역', '용산역', '영등포역', '안양역', '수원역', '평택역', '천안역', '조치원역', '대전역', '영동역', '김천역', '구미역', '대구역', '동대구역', '경주역', '울산역', '부산역', '부전역',
+  '익산역', '정읍역', '광주역', '목포역', '전주역', '순천역', '여수역', '나주역',
+  '청량리역', '원주역', '제천역', '단양역', '영주역', '안동역', '태백역', '동해역', '강릉역'
+];
+
 // 교통시설이 없는 것으로 알려진 도시들
 const CITIES_WITHOUT_FACILITIES = {
   airplane: [
@@ -745,21 +752,6 @@ const CITIES_WITHOUT_FACILITIES = {
     '울릉', '독도',
   ]
 };
-
-// 실제 KTX역 목록 (일부)
-const ACTUAL_KTX_STATIONS = [
-  '서울역', '용산역', '광명역', '천안아산역', '오송역', '대전역', '김천구미역', '동대구역', '신경주역', '울산역', '부산역',
-  '익산역', '정읍역', '광주송정역', '나주역', '목포역', '전주역', '순천역', '여수엑스포역',
-  '평창역', '진부역', '강릉역', '동해역',
-  '수서역', '지제역', '만종역', '강동역', '영주역', '봉화역', '춘양역', '안동역'
-];
-
-// 실제 일반열차역 목록 (주요역들)
-const ACTUAL_TRAIN_STATIONS = [
-  '서울역', '용산역', '영등포역', '안양역', '수원역', '평택역', '천안역', '조치원역', '대전역', '영동역', '김천역', '구미역', '대구역', '동대구역', '경주역', '울산역', '부산역', '부전역',
-  '익산역', '정읍역', '광주역', '나주역', '목포역', '전주역', '순천역', '여수역',
-  '청량리역', '원주역', '제천역', '단양역', '영주역', '안동역', '태백역', '동해역', '강릉역'
-];
 
 // 모호한 지명 검증 및 명확화
 export const clarifyAmbiguousDestination = (destination: string): { 
@@ -799,32 +791,55 @@ export const validateTransportFacility = async (
       };
     }
     
-    // 지명 정규화 
+    // 지명 정규화 (경기도 광주는 "경기광주"로 처리)
     let normalizedDestination = destination.trim();
-    
-    // 광주 처리
     if (normalizedDestination.includes('광주시') && normalizedDestination.includes('경기')) {
       normalizedDestination = '경기광주';
     } else if (normalizedDestination === '광주시' && !normalizedDestination.includes('광역')) {
       normalizedDestination = '경기광주'; // 단순히 "광주시"라고 하면 경기도로 간주
     }
     
-    // 광역시 정규화 (부산광역시, 대구광역시 등을 간단한 이름으로 변환)
-    const cityMappings: { [key: string]: string } = {
-      '부산광역시': '부산',
-      '대구광역시': '대구', 
-      '인천광역시': '인천',
-      '광주광역시': '광주',
-      '대전광역시': '대전',
-      '울산광역시': '울산',
-      '세종특별자치시': '세종',
-      '세종시': '세종'
-    };
-    
-    if (cityMappings[normalizedDestination]) {
-      normalizedDestination = cityMappings[normalizedDestination];
+    // 부산 특별 처리
+    if (normalizedDestination === '부산' || normalizedDestination === '부산광역시') {
+      if (transportType === 'airplane') {
+        return {
+          isValid: true,
+          facility: {
+            name: '김해국제공항',
+            address: '부산광역시 강서구 공항진입로 108',
+            lat: 35.1795543,
+            lng: 128.9382382,
+            exists: true
+          },
+          message: '✅ 김해국제공항을 이용할 수 있습니다.'
+        };
+      } else if (transportType === 'ktx' || transportType === 'train') {
+        return {
+          isValid: true,
+          facility: {
+            name: '부산역',
+            address: '부산광역시 동구 중앙대로 206',
+            lat: 35.1146961,
+            lng: 129.0411833,
+            exists: true
+          },
+          message: '✅ 부산역을 이용할 수 있습니다.'
+        };
+      } else if (transportType === 'bus') {
+        return {
+          isValid: true,
+          facility: {
+            name: '부산종합버스터미널',
+            address: '부산광역시 금정구 중앙대로 2238',
+            lat: 35.3213333,
+            lng: 129.0423333,
+            exists: true
+          },
+          message: '✅ 부산종합버스터미널을 이용할 수 있습니다.'
+        };
+      }
     }
-    
+
     // 먼저 알려진 예외 도시들을 확인
     const citiesWithoutFacility = CITIES_WITHOUT_FACILITIES[transportType] || [];
     const destinationLower = normalizedDestination.toLowerCase();
@@ -859,38 +874,14 @@ export const validateTransportFacility = async (
       console.log(`🔄 역명 매핑: ${normalizedDestination} → ${searchDestination}`);
     }
     
-    // 주요 도시들의 특별 처리
-    if (normalizedDestination === '광주') {
+    // 광주광역시의 특별 처리
+    if (normalizedDestination === '광주광역시' || normalizedDestination === '광주') {
       if (transportType === 'airplane') {
         searchDestination = '광주공항';
       } else if (transportType === 'bus') {
         searchDestination = '광주 유스퀘어';
       } else if (transportType === 'train') {
         searchDestination = '광주역';
-      }
-    } else if (normalizedDestination === '부산') {
-      if (transportType === 'airplane') {
-        searchDestination = '김해국제공항';
-      } else if (transportType === 'bus') {
-        searchDestination = '부산종합버스터미널';
-      } else if (transportType === 'train' || transportType === 'ktx') {
-        searchDestination = '부산역';
-      }
-    } else if (normalizedDestination === '대구') {
-      if (transportType === 'airplane') {
-        searchDestination = '대구국제공항';
-      } else if (transportType === 'bus') {
-        searchDestination = '대구동부터미널';
-      } else if (transportType === 'train' || transportType === 'ktx') {
-        searchDestination = '동대구역';
-      }
-    } else if (normalizedDestination === '인천') {
-      if (transportType === 'airplane') {
-        searchDestination = '인천국제공항';
-      } else if (transportType === 'bus') {
-        searchDestination = '인천종합버스터미널';
-      } else if (transportType === 'train') {
-        searchDestination = '인천역';
       }
     }
     
@@ -907,22 +898,14 @@ export const validateTransportFacility = async (
       const address = place.address_name.toLowerCase();
       const destinationLower = normalizedDestination.toLowerCase();
       
-      // 목적지 이름이 포함되어야 함 (특별 처리)
+      // 목적지 이름이 포함되어야 함 (광주 특별 처리)
       let hasDestination;
-      if (normalizedDestination === '광주') {
+      if (normalizedDestination === '광주광역시') {
         hasDestination = (placeName.includes('광주') || address.includes('광주')) &&
                         !address.includes('경기') && // 경기도 광주 제외
                         !address.includes('경기도');
       } else if (normalizedDestination === '경기광주') {
         hasDestination = address.includes('경기') && (placeName.includes('광주') || address.includes('광주'));
-      } else if (normalizedDestination === '부산') {
-        hasDestination = (placeName.includes('부산') || address.includes('부산')) ||
-                        (placeName.includes('김해') && address.includes('부산')) || // 김해국제공항
-                        (placeName.includes('김해') && transportType === 'airplane'); // 김해국제공항 별도 인식
-      } else if (normalizedDestination === '대구') {
-        hasDestination = (placeName.includes('대구') || address.includes('대구'));
-      } else if (normalizedDestination === '인천') {
-        hasDestination = (placeName.includes('인천') || address.includes('인천'));
       } else {
         hasDestination = placeName.includes(destinationLower) || address.includes(destinationLower);
       }
@@ -969,18 +952,8 @@ export const validateTransportFacility = async (
                  !placeName.includes('상점');
           
           // 실제 KTX역 목록과 비교
-          const matchesActualStation = ACTUAL_KTX_STATIONS.some(station => 
-            placeName.includes(station.toLowerCase()) || 
-            (destinationLower === '전주' && placeName.includes('전주역')) ||
-            (destinationLower === '경주' && placeName.includes('신경주역')) ||
-            (destinationLower === '구미' && placeName.includes('김천구미역')) ||
-            (destinationLower === '여수' && placeName.includes('여수엑스포역')) ||
-            (destinationLower === '광주' && placeName.includes('광주송정역')) ||
-            (destinationLower === '나주' && placeName.includes('나주역')) ||
-            (destinationLower === '부산' && placeName.includes('부산역')) ||
-            (destinationLower === '대구' && placeName.includes('동대구역')) ||
-            (destinationLower === '천안' && placeName.includes('천안아산역')) ||
-            (destinationLower === '아산' && placeName.includes('천안아산역'))
+          const matchesActualStation = ACTUAL_TRAIN_STATIONS.some(station => 
+            placeName.includes(station.toLowerCase())
           );
           
           return isValidStation && matchesActualStation;
@@ -1009,10 +982,7 @@ export const validateTransportFacility = async (
           
           // 실제 기차역 목록과 비교
           const matchesActualStation = ACTUAL_TRAIN_STATIONS.some(station => 
-            placeName.includes(station.toLowerCase()) ||
-            (destinationLower === '나주' && placeName.includes('나주역')) ||
-            (destinationLower === '부산' && (placeName.includes('부산역') || placeName.includes('부전역'))) ||
-            (destinationLower === '대구' && (placeName.includes('대구역') || placeName.includes('동대구역')))
+            placeName.includes(station.toLowerCase())
           );
           
           return isValidStation && matchesActualStation;
