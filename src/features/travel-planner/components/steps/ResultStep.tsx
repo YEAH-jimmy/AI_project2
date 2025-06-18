@@ -848,9 +848,13 @@ export function ResultStep() {
                                       location: transportPoint,
                                       type: 'transport',
                                       description: '여행지 도착',
+                                      rating: 0,
+                                      reviewCount: 0,
+                                      matchScore: 0,
                                       phone: '',
-                                      timeSlot: 'early_morning',
-                                      activityType: 'transport',
+                                      tags: ['교통'],
+                                      timeSlot: 'early_morning' as 'early_morning',
+                                      activityType: 'transport' as 'transport',
                                       scheduledTime: '08:00',
                                       orderIndex: -1,
                                       isOptimized: true
@@ -862,9 +866,13 @@ export function ResultStep() {
                                       location: transportPoint,
                                       type: 'transport',
                                       description: '여행지 출발',
+                                      rating: 0,
+                                      reviewCount: 0,
+                                      matchScore: 0,
                                       phone: '',
-                                      timeSlot: 'evening',
-                                      activityType: 'transport',
+                                      tags: ['교통'],
+                                      timeSlot: 'evening' as 'evening',
+                                      activityType: 'transport' as 'transport',
                                       scheduledTime: '18:00',
                                       orderIndex: 999,
                                       isOptimized: true
@@ -925,6 +933,9 @@ export function ResultStep() {
                                         location: transportPoint,
                                         type: 'transport',
                                         description: '여행지 도착',
+                                        rating: 0,
+                                        reviewCount: 0,
+                                        matchScore: 0,
                                         phone: ''
                                       });
                                     } else if (isLastDay) {
@@ -934,6 +945,9 @@ export function ResultStep() {
                                         location: transportPoint,
                                         type: 'transport',
                                         description: '여행지 출발',
+                                        rating: 0,
+                                        reviewCount: 0,
+                                        matchScore: 0,
                                         phone: ''
                                       });
                                     }

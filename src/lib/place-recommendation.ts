@@ -102,11 +102,11 @@ export const searchIntegratedPlaces = async (
     
     // 2. 네이버 검색 (현재는 카카오만 사용)
     // const naverPlaces = await searchNaverPlaces(query)
-    
-    // 3. 통합 및 정규화
-    let places: RecommendedPlace[] = kakaoPlaces.map((place, index) => ({
-      id: place.id || `kakao_${index}`,
-      name: place.place_name,
+          
+      // 3. 통합 및 정규화
+      let places: RecommendedPlace[] = kakaoPlaces.map((place, index) => ({
+        id: place.id || `kakao_${index}`,
+        name: place.place_name,
       category: place.category_name,
       address: place.address_name,
       roadAddress: place.road_address_name,
@@ -452,7 +452,7 @@ const getRegionSpecificQueries = (region: string): string[] => {
     '여수': ['여수 밤바다', '여수 엑스포', '여수 오동도', '여수 향일암', '여수 케이블카'],
     // 광주 구분 추가
     '광주광역시': ['광주 금남로', '광주 무등산', '광주 양림동', '광주 국립아시아문화전당', '광주 충장로'],
-    '광주시': ['경기도 광주', '광주 남한산성', '광주 곤지암', '광주 분원', '경기 광주 도자기'],
+    '광주시': ['경기도 광주', '광주 남한산성', '광주 곤지암', '광주 분원', '경기 광주 도자기']
   };
   
   return regionQueries[region] || [`${region} 유명한곳`, `${region} 인기장소`];
@@ -1168,8 +1168,8 @@ const generateDayItinerary = (
   }
 
   // 식사 필수 보장 검증 (아침, 점심, 저녁)
-  const requiredMeals = ['early_morning', 'lunch', isLastDay ? 'evening' : 'evening'];
-  const currentMeals = dayPlan.filter(p => p.activityType === 'dining').map(p => p.timeSlot);
+  const requiredMeals: ('early_morning' | 'lunch' | 'evening')[] = ['early_morning', 'lunch', isLastDay ? 'evening' : 'evening'];
+  const currentMeals = dayPlan.filter(p => p.activityType === 'dining').map(p => p.timeSlot).filter(Boolean);
   
   requiredMeals.forEach((mealTime, index) => {
     if (!currentMeals.includes(mealTime)) {
@@ -1192,7 +1192,7 @@ const generateDayItinerary = (
         tags: ['음식점', '필수식사'],
         source: 'kakao' as const,
         suggestedVisitDuration: 90,
-        timeSlot: mealTime as any,
+        timeSlot: mealTime as 'early_morning' | 'morning' | 'lunch' | 'afternoon' | 'evening' | 'night',
         activityType: 'dining',
         scheduledTime: mealTimes[index],
         orderIndex: mealTime === 'early_morning' ? 1 : mealTime === 'lunch' ? 50 : 90
